@@ -19,7 +19,7 @@
   <div class="flex items-center gap-3">
     <div class="w-8 h-8 bg-black text-white flex items-center justify-center font-bold rounded">BG</div>
     <div><div class="font-bold">BIMGuard</div><div class="text-xs text-gray-500">AI-Native IFC Compliance · HKU AI+BIM · No-build Demo</div></div>
-    <span class="ml-4 text-xs bg-gray-100 px-2 py-1 rounded">Fallback · HK FS 2011 · IfcOpenShell</span>
+    <span class="ml-4 text-xs bg-gray-100 px-2 py-1 rounded">HK FS 2011 · IfcOpenShell · deterministic checks</span>
   </div>
   <div class="flex items-center gap-2">
     <select id="minWidth" class="border rounded px-2 py-1 text-sm">
@@ -33,27 +33,28 @@
 <div id="loaded" class="mx-6 mt-3 text-xs text-gray-500"></div>
 <div class="flex-1 grid grid-cols-12 gap-4 p-4">
   <div class="col-span-7 bg-white rounded-xl border overflow-hidden flex flex-col">
-    <div class="px-4 py-2 border-b flex items-center justify-between"><span class="font-medium text-sm">3D Viewer</span><span id="selInfo" class="text-xs text-gray-500">Box placeholders by placement</span></div>
+    <div class="px-4 py-2 border-b flex items-center justify-between"><span class="font-medium text-sm">3D Element Locator</span><span id="selInfo" class="text-xs text-gray-500">Schematic boxes by IFC placement</span></div>
     <div id="viewer" class="flex-1 min-h-[520px] bg-gray-50 relative"></div>
-    <div class="p-2 text-xs text-gray-500">Legend: <span class="text-green-600">■ Door pass</span> <span class="text-orange-500">■ Door fail</span> <span class="text-purple-400">■ Beam</span> <span class="text-sky-400">■ Pipe</span> <span class="text-gray-400">■ Wall</span> — Orbit with mouse</div>
+    <div class="p-2 text-xs text-gray-500">Legend: <span class="text-green-600">■ Door pass</span> <span class="text-orange-500">■ Door fail</span> <span class="text-purple-400">■ Beam</span> <span class="text-sky-400">■ Pipe</span> <span class="text-gray-400">■ Wall</span> — locator is schematic, not IFC shape rendering</div>
   </div>
   <div class="col-span-5 flex flex-col gap-4">
     <div id="scoreCard" class="bg-white rounded-xl border p-4 hidden">
       <div class="flex items-center justify-between"><div><div class="text-xs text-gray-500">Compliance Score</div><div class="text-3xl font-bold"><span id="scoreVal">--</span> <span class="text-sm font-normal text-gray-500">/100</span></div></div><div id="scoreCircle" class="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold bg-gray-400">--</div></div>
-      <div class="grid grid-cols-2 gap-3 mt-4"><div class="border rounded-lg p-3"><div class="text-xs text-gray-500">Exit Door Width</div><div id="doorStat" class="text-sm font-medium">--</div><div id="doorSub" class="text-xs text-gray-400"></div></div><div class="border rounded-lg p-3"><div class="text-xs text-gray-500">Geometry Clash</div><div id="clashStat" class="text-sm font-medium">--</div><div class="text-xs text-gray-400">BVH + AABB</div></div></div>
+      <div class="grid grid-cols-2 gap-3 mt-4"><div class="border rounded-lg p-3"><div class="text-xs text-gray-500">Exit Door Width</div><div id="doorStat" class="text-sm font-medium">--</div><div id="doorSub" class="text-xs text-gray-400"></div></div><div class="border rounded-lg p-3"><div class="text-xs text-gray-500">Geometry Clash</div><div id="clashStat" class="text-sm font-medium">--</div><div id="clashMethod" class="text-xs text-gray-400">IfcOpenShell BVH for real geometry</div></div></div>
     </div>
-    <div id="noModel" class="bg-white rounded-xl border p-8 text-center text-sm text-gray-500">Upload an .ifc to see results.<br/><span class="text-xs">Try sample-ifc/BIMGuard_Demo.ifc (D-102 fail + 1 clash)</span><br/><button id="loadSample" class="mt-3 border px-3 py-1 rounded text-xs hover:bg-black hover:text-white">Load Demo Data (no upload)</button></div>
+    <div id="noModel" class="bg-white rounded-xl border p-8 text-center text-sm text-gray-500">Upload an .ifc to see results.<br/><span class="text-xs">Try sample-ifc/BIMGuard_Demo.ifc (D-102 fail + 1 labelled synthetic clash)</span><br/><button id="loadSample" class="mt-3 border px-3 py-1 rounded text-xs hover:bg-black hover:text-white">Load Demo Data (if preloaded)</button></div>
     <div id="issues" class="bg-white rounded-xl border hidden flex flex-col"><div class="px-4 py-2 border-b font-medium text-sm">Critical Issues</div><div id="issuesList" class="divide-y max-h-[300px] overflow-auto"></div><div id="explainBox" class="hidden m-3 p-3 bg-gray-50 border rounded text-xs whitespace-pre-wrap"></div></div>
-    <div class="bg-white rounded-xl border flex flex-col h-[300px]"><div class="px-4 py-2 border-b font-medium text-sm flex items-center justify-between"><span>Ask BIMGuard</span><span class="text-xs bg-gray-100 px-2 py-0.5 rounded">Tool-router</span></div><div id="chatLog" class="flex-1 overflow-auto p-3 space-y-2 text-xs"><div class="bg-gray-100 p-2 rounded">Ask e.g. "Why is D-102 a problem?" or "Show me all serious violations"</div></div><div class="p-2 border-t flex gap-2"><input id="chatInput" placeholder="Why is D-102 non-compliant?" class="flex-1 border rounded px-3 py-1.5 text-sm"/><button id="chatSend" class="bg-black text-white px-4 py-1.5 rounded text-sm">Send</button></div></div>
+    <div class="bg-white rounded-xl border flex flex-col h-[300px]"><div class="px-4 py-2 border-b font-medium text-sm flex items-center justify-between"><span>Ask BIMGuard</span><span class="text-xs bg-gray-100 px-2 py-0.5 rounded">Grounded explainer</span></div><div id="chatLog" class="flex-1 overflow-auto p-3 space-y-2 text-xs"><div class="bg-gray-100 p-2 rounded">Ask e.g. "Why is D-102 a problem?" or "Show me all serious violations"</div></div><div class="p-2 border-t flex gap-2"><input id="chatInput" placeholder="Why is D-102 non-compliant?" class="flex-1 border rounded px-3 py-1.5 text-sm"/><button id="chatSend" class="bg-black text-white px-4 py-1.5 rounded text-sm">Send</button></div></div>
   </div>
 </div>
-<footer class="text-center text-xs text-gray-400 py-3 border-t bg-white">Deterministic: IfcOpenShell · LLM: tool router → explanation · HKU DUPAD Ref.536608</footer>
+<footer class="text-center text-xs text-gray-400 py-3 border-t bg-white">Deterministic: IfcOpenShell · LLM: grounded explanation · HKU DUPAD Ref.536608</footer>
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 let elements = [];
 let selectedGuid = null;
+let failedDoorGuids = new Set();
 let scene, camera, renderer, controls;
 
 function initThree(){
@@ -73,7 +74,6 @@ function initThree(){
 }
 function animate(){ requestAnimationFrame(animate); controls.update(); renderer.render(scene,camera); }
 function clearScene(){
-  // remove meshes except grid/light
   const toRemove=[]; scene.traverse(o=>{ if(o.isMesh) toRemove.push(o);}); toRemove.forEach(o=>scene.remove(o));
 }
 function renderElements(){
@@ -82,7 +82,7 @@ function renderElements(){
     const p = el.placement || {x:(i%6)*2, y:Math.floor(i/6)*2, z:0};
     let color=0xd1d5db;
     if(el.type==='IfcWall') color=0x94a3b8;
-    if(el.type==='IfcDoor') color = (el.width && el.width*1000<750)?0xf97316:0x22c55e;
+    if(el.type==='IfcDoor') color = failedDoorGuids.has(el.guid)?0xf97316:0x22c55e;
     if(el.type==='IfcBeam') color=0xa78bfa;
     if(el.type==='IfcPipeSegment' || el.type==='IfcFlowSegment') color=0x38bdf8;
     const isSel = selectedGuid && el.guid===selectedGuid;
@@ -117,9 +117,13 @@ function updateScore(s){
   document.getElementById('doorStat').textContent=`${s.doors.passed} passed · ${s.doors.failed} failed`;
   document.getElementById('doorSub').textContent=`${s.doors.total} checked · ≥${s.min_width}mm`;
   document.getElementById('clashStat').textContent=`${s.clashes.count} clashes`;
+  const firstMethod=s.clashes.results?.[0]?.method;
+  document.getElementById('clashMethod').textContent=firstMethod==='synthetic_aabb_fallback'?'Labelled synthetic demo fallback':'IfcOpenShell BVH for real geometry';
+  failedDoorGuids = new Set(s.doors.results.filter(d=>d.status==='fail').map(d=>d.guid));
+  if(elements.length) renderElements();
   const list=document.getElementById('issuesList'); list.innerHTML='';
   const fails=s.doors.results.filter(d=>d.status==='fail');
-  if(fails.length===0 && s.clashes.results.length===0) list.innerHTML='<div class="p-4 text-sm text-green-600">✓ No violations</div>';
+  if(fails.length===0 && s.clashes.results.length===0) list.innerHTML='<div class="p-4 text-sm text-green-600">✓ No violations found by the available checks</div>';
   fails.forEach(d=>{
     const div=document.createElement('div'); div.className='p-3 flex items-start justify-between hover:bg-gray-50';
     div.innerHTML=`<div><div class="text-sm font-medium flex items-center gap-2"><span class="bg-red-100 text-red-700 text-xs px-1.5 py-0.5 rounded">FAIL</span>${d.name} <span class="text-xs text-gray-500">${d.guid.slice(0,8)}</span></div><div class="text-xs text-gray-600 mt-1">Exit door too narrow</div><div class="text-xs text-red-600">${d.measured_mm} mm < ${d.required_mm} mm (Δ ${d.delta_mm} mm)</div><div class="text-[11px] text-gray-400">${d.rule}</div></div><div class="flex flex-col gap-1"><button class="locate text-xs border px-2 py-1 rounded hover:bg-black hover:text-white">Locate</button><button class="explain text-xs border px-2 py-1 rounded hover:bg-black hover:text-white">Explain</button></div>`;
@@ -132,7 +136,8 @@ function updateScore(s){
   });
   s.clashes.results.forEach(c=>{
     const div=document.createElement('div'); div.className='p-3 flex items-start justify-between hover:bg-gray-50';
-    div.innerHTML=`<div><div class="text-sm font-medium flex items-center gap-2"><span class="text-xs px-1.5 py-0.5 rounded ${c.severity==='high'?'bg-red-100 text-red-700':c.severity==='medium'?'bg-amber-100 text-amber-700':'bg-gray-100'}">${c.severity}</span>${c.a_name} × ${c.b_name}</div><div class="text-xs text-gray-600">${c.a_type} × ${c.b_type}</div><div class="text-xs text-red-600">${c.penetration_mm} mm penetration</div></div><div class="flex flex-col gap-1"><button class="locate text-xs border px-2 py-1 rounded hover:bg-black hover:text-white">Locate</button><button class="explain text-xs border px-2 py-1 rounded hover:bg-black hover:text-white">Explain</button></div>`;
+    const methodLabel=c.method==='synthetic_aabb_fallback'?'synthetic demo fallback':'IfcOpenShell BVH';
+    div.innerHTML=`<div><div class="text-sm font-medium flex items-center gap-2"><span class="text-xs px-1.5 py-0.5 rounded ${c.severity==='high'?'bg-red-100 text-red-700':c.severity==='medium'?'bg-amber-100 text-amber-700':'bg-gray-100'}">${c.severity}</span>${c.a_name} × ${c.b_name}</div><div class="text-xs text-gray-600">${c.a_type} × ${c.b_type}</div><div class="text-xs text-red-600">${c.penetration_mm} mm penetration</div><div class="text-[11px] text-gray-400">${methodLabel}</div></div><div class="flex flex-col gap-1"><button class="locate text-xs border px-2 py-1 rounded hover:bg-black hover:text-white">Locate</button><button class="explain text-xs border px-2 py-1 rounded hover:bg-black hover:text-white">Explain</button></div>`;
     div.querySelector('.locate').onclick=()=>{ selectedGuid=c.a_guid; document.getElementById('selInfo').textContent=`Selected: ${c.a_guid.slice(0,8)}`; renderElements(); };
     div.querySelector('.explain').onclick=async()=>{
       const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:`Explain clash ${c.a_guid} x ${c.b_guid} penetration ${c.penetration_mm}mm`,min_width:s.min_width})});
@@ -155,7 +160,6 @@ document.getElementById('fileInput').addEventListener('change', async e=>{
 });
 document.getElementById('minWidth').addEventListener('change', async()=>{ try{ await fetchSummary();}catch{}} );
 document.getElementById('loadSample').addEventListener('click', async()=>{
-  // try to fetch summary without upload (backend already has demo loaded if we pre-load)
   try{ await fetchSummary(); await fetchElements(); document.getElementById('error').classList.add('hidden');}
   catch(e){ const box=document.getElementById('error'); box.textContent=e.message+' — please Upload sample-ifc/BIMGuard_Demo.ifc'; box.classList.remove('hidden');}
 });
@@ -170,7 +174,6 @@ async function sendChat(){
   const j=await r.json();
   const a=document.createElement('div'); a.className='bg-gray-100 p-2 rounded text-xs whitespace-pre-wrap'; a.textContent=j.reply; log.appendChild(a); log.scrollTop=log.scrollHeight;
 }
-// try auto-load summary on start
 fetchSummary().then(()=>fetchElements()).catch(()=>{});
 </script>
 </body>
