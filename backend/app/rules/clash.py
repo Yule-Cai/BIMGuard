@@ -55,8 +55,7 @@ def _collect_elements(model, types):
         except Exception:
             pass
 
-    # by_type on IFC inheritance can make generic classes overlap with specific
-    # classes; deduplicate on GlobalId / entity id before clashing.
+    # IFC inheritance can make generic classes overlap with specific classes.
     unique = []
     seen = set()
     for el in elements:
@@ -72,15 +71,26 @@ def _collect_elements(model, types):
     return unique
 
 
+def _is_bimguard_demo(model) -> bool:
+    """True only for the repository's controlled semantic/no-geometry sample."""
+    try:
+        return any(
+            (getattr(project, "Name", "") or "").strip() == "BIMGuard Demo"
+            for project in model.by_type("IfcProject")
+        )
+    except Exception:
+        return False
+
+
 def _detect_bvh(model, elems_a, elems_b, tolerance):
     """Run exact IFC geometry intersection checks with an IfcOpenShell BVH tree.
 
-    Follows IfcOpenShell's documented geometry-tree workflow: build the tree with
-    the geometry iterator, then clash the two IFC element sets. Distances returned
-    by clash_intersection_many() are metres and are converted to millimetres here.
+    This follows IfcOpenShell's documented geometry-tree workflow: build the tree
+    with the geometry iterator, then clash the two IFC element sets. Distances
+    returned by clash_intersection_many() are metres and are converted to mm.
 
     Returns (results, geometry_count). An empty result with geometry_count > 0 is
-    a valid 'no clashes' result and must not fall back to guessed dimensions.
+    authoritative and must not fall back to guessed element dimensions.
     """
     if not (HAS_GEOM and HAS_IFC):
         return [], 0
@@ -97,7 +107,9 @@ def _detect_bvh(model, elems_a, elems_b, tolerance):
     geometry_count = 0
     if iterator.initialize():
         while True:
-            tree.add_element(iterator.get())  # triangulation -> BVH tree
+            # iterator.get() returns triangulation; add_element() therefore builds
+            # a BVH tree, matching the official IfcOpenShell example.
+            tree.add_element(iterator.get())
             geometry_count += 1
             if not iterator.next():
                 break
@@ -150,12 +162,11 @@ def _detect_bvh(model, elems_a, elems_b, tolerance):
 
 
 # ---------------------------------------------------------------------------
-# Synthetic-demo fallback
+# Controlled synthetic-demo fallback
 # ---------------------------------------------------------------------------
-# BIMGuard_Demo.ifc intentionally contains semantic IFC entities and placements
-# but no shape representations, so it cannot populate a geometry tree. These
-# rough AABBs exist only to keep that controlled no-geometry demo usable. They
-# are never used when a real IFC successfully contributes geometry to the BVH.
+# BIMGuard_Demo.ifc intentionally has semantic IFC entities and placements but
+# no shape representations. Rough AABBs keep that one controlled sample useful
+# for a zero-dependency demo. They are never used for arbitrary real IFC files.
 
 
 def _get_synthetic_aabb(el):
@@ -261,8 +272,8 @@ def detect_clashes(model, types_a=None, types_b=None, tolerance=0.001):
 
     Real IFCs with geometric representations are checked using IfcOpenShell's BVH
     geometry tree and clash_intersection_many(). The rough AABB path is restricted
-    to the repository's controlled synthetic/no-geometry demo and is explicitly
-    labelled in every result.
+    to BIMGuard's controlled synthetic/no-geometry sample and every such result is
+    explicitly labelled ``synthetic_aabb_fallback``.
 
     ``tolerance`` is in metres, matching IfcOpenShell's geometry-tree API.
     """
@@ -296,13 +307,11 @@ def detect_clashes(model, types_a=None, types_b=None, tolerance=0.001):
     elems_a = _collect_elements(model, types_a)
     elems_b = _collect_elements(model, types_b)
     if not elems_b:
-        try:
-            elems_b = _collect_elements(model, ["IfcDistributionFlowElement"])
-        except Exception:
-            elems_b = []
+        elems_b = _collect_elements(model, ["IfcDistributionFlowElement"])
     if not elems_a or not elems_b:
         return []
 
+    controlled_demo = _is_bimguard_demo(model)
     if HAS_GEOM:
         try:
             bvh_results, geometry_count = _detect_bvh(
@@ -312,12 +321,22 @@ def detect_clashes(model, types_a=None, types_b=None, tolerance=0.001):
                 # Even an empty list is authoritative: geometry existed and no
                 # qualifying intersection was found. Never invent AABB clashes.
                 return _deduplicate(bvh_results)
+            if controlled_demo:
+                logger.info(
+                    "BIMGuard Demo has no shape representations; using labelled synthetic AABB fallback"
+                )
+                return _deduplicate(_detect_synthetic_aabb(elems_a, elems_b))
         except Exception as exc:
             logger.warning("BVH clash detection failed: %s", exc)
+            if controlled_demo:
+                return _deduplicate(_detect_synthetic_aabb(elems_a, elems_b))
 
-    # A real IFC that cannot be geometrically evaluated should fail conservative:
-    # return no fabricated clashes. The API/UI can still perform semantic checks.
+    if controlled_demo:
+        return _deduplicate(_detect_synthetic_aabb(elems_a, elems_b))
+
+    # For arbitrary real IFCs, fail conservatively rather than fabricating clashes
+    # from guessed dimensions when no usable geometric representation is available.
     logger.warning(
-        "No usable IFC geometry for clash detection; synthetic AABB fallback skipped"
+        "No usable IFC geometry for clash detection; heuristic fallback skipped for real IFC"
     )
     return []
