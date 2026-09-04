@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+.env
+*.egg-info/
+.pytest_cache/
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+*.local
+frontend/dist/
+
+# IFC / BIM
+*.ifc
+*.glb
+*.gltf
+!sample-ifc/*.ifc
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+uploads/
+backend/uploads/

@@ -1,0 +1,63 @@
+{
+  "tools": [
+    {
+      "name": "get_ifc_elements",
+      "description": "List IFC elements by type. Use to inventory model or locate by GUID.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "type": { "type": "string", "description": "IFC type, e.g., IfcDoor, IfcWall, IfcBeam, IfcPipeSegment, IfcFlowSegment" },
+          "limit": { "type": "integer", "default": 50 },
+          "guid": { "type": "string", "description": "Optional: filter by GlobalId" }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "check_exit_door_width",
+      "description": "Check exit door width compliance against HK FS Code 2011 Table B2. Returns per-door measured vs required.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "min_width": { "type": "number", "default": 750, "description": "Minimum clear width in mm. 750 for 4-30 persons, 850 for 31-200 persons." }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "detect_clashes",
+      "description": "Detect geometric clashes between structural and MEP elements via BVH tree. Returns pairs with penetration.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "types_a": { "type": "array", "items": { "type": "string" }, "default": ["IfcWall", "IfcBeam", "IfcColumn", "IfcSlab"] },
+          "types_b": { "type": "array", "items": { "type": "string" }, "default": ["IfcPipeSegment", "IfcFlowSegment", "IfcDuctSegment", "IfcDistributionElement"] },
+          "tolerance": { "type": "number", "default": 0.001 }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "get_element_properties",
+      "description": "Get Psets/Qtos and placement for a single element by GUID.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "guid": { "type": "string", "description": "GlobalId of element" }
+        },
+        "required": ["guid"]
+      }
+    },
+    {
+      "name": "get_summary",
+      "description": "Get aggregated compliance summary (score, pass/fail counts, clashes).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "min_width": { "type": "number", "default": 750 }
+        },
+        "required": []
+      }
+    }
+  ]
+}

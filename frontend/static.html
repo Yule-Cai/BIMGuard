@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>BIMGuard — Static Demo (No Build)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body class="bg-[#f6f7f9] min-h-screen flex flex-col">
+<header class="sticky top-0 z-10 bg-white border-b px-6 py-3 flex items-center justify-between">
+  <div class="flex items-center gap-3">
+    <div class="w-8 h-8 bg-black text-white flex items-center justify-center font-bold rounded">BG</div>
+    <div><div class="font-bold">BIMGuard</div><div class="text-xs text-gray-500">AI-Native IFC Compliance · HKU AI+BIM · No-build Demo</div></div>
+    <span class="ml-4 text-xs bg-gray-100 px-2 py-1 rounded">Fallback · HK FS 2011 · IfcOpenShell</span>
+  </div>
+  <div class="flex items-center gap-2">
+    <select id="minWidth" class="border rounded px-2 py-1 text-sm">
+      <option value="750">750 mm (4–30 p)</option>
+      <option value="850">850 mm (31–200 p)</option>
+    </select>
+    <label class="bg-black text-white px-4 py-1.5 rounded text-sm cursor-pointer">Upload .ifc<input id="fileInput" type="file" accept=".ifc" class="hidden"/></label>
+  </div>
+</header>
+<div id="error" class="hidden mx-6 mt-4 bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded text-sm"></div>
+<div id="loaded" class="mx-6 mt-3 text-xs text-gray-500"></div>
+<div class="flex-1 grid grid-cols-12 gap-4 p-4">
+  <div class="col-span-7 bg-white rounded-xl border overflow-hidden flex flex-col">
+    <div class="px-4 py-2 border-b flex items-center justify-between"><span class="font-medium text-sm">3D Viewer</span><span id="selInfo" class="text-xs text-gray-500">Box placeholders by placement</span></div>
+    <div id="viewer" class="flex-1 min-h-[520px] bg-gray-50 relative"></div>
+    <div class="p-2 text-xs text-gray-500">Legend: <span class="text-green-600">■ Door pass</span> <span class="text-orange-500">■ Door fail</span> <span class="text-purple-400">■ Beam</span> <span class="text-sky-400">■ Pipe</span> <span class="text-gray-400">■ Wall</span> — Orbit with mouse</div>
+  </div>
+  <div class="col-span-5 flex flex-col gap-4">
+    <div id="scoreCard" class="bg-white rounded-xl border p-4 hidden">
+      <div class="flex items-center justify-between"><div><div class="text-xs text-gray-500">Compliance Score</div><div class="text-3xl font-bold"><span id="scoreVal">--</span> <span class="text-sm font-normal text-gray-500">/100</span></div></div><div id="scoreCircle" class="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold bg-gray-400">--</div></div>
+      <div class="grid grid-cols-2 gap-3 mt-4"><div class="border rounded-lg p-3"><div class="text-xs text-gray-500">Exit Door Width</div><div id="doorStat" class="text-sm font-medium">--</div><div id="doorSub" class="text-xs text-gray-400"></div></div><div class="border rounded-lg p-3"><div class="text-xs text-gray-500">Geometry Clash</div><div id="clashStat" class="text-sm font-medium">--</div><div class="text-xs text-gray-400">BVH + AABB</div></div></div>
+    </div>
+    <div id="noModel" class="bg-white rounded-xl border p-8 text-center text-sm text-gray-500">Upload an .ifc to see results.<br/><span class="text-xs">Try sample-ifc/BIMGuard_Demo.ifc (D-102 fail + 1 clash)</span><br/><button id="loadSample" class="mt-3 border px-3 py-1 rounded text-xs hover:bg-black hover:text-white">Load Demo Data (no upload)</button></div>
+    <div id="issues" class="bg-white rounded-xl border hidden flex flex-col"><div class="px-4 py-2 border-b font-medium text-sm">Critical Issues</div><div id="issuesList" class="divide-y max-h-[300px] overflow-auto"></div><div id="explainBox" class="hidden m-3 p-3 bg-gray-50 border rounded text-xs whitespace-pre-wrap"></div></div>
+    <div class="bg-white rounded-xl border flex flex-col h-[300px]"><div class="px-4 py-2 border-b font-medium text-sm flex items-center justify-between"><span>Ask BIMGuard</span><span class="text-xs bg-gray-100 px-2 py-0.5 rounded">Tool-router</span></div><div id="chatLog" class="flex-1 overflow-auto p-3 space-y-2 text-xs"><div class="bg-gray-100 p-2 rounded">Ask e.g. "Why is D-102 a problem?" or "Show me all serious violations"</div></div><div class="p-2 border-t flex gap-2"><input id="chatInput" placeholder="Why is D-102 non-compliant?" class="flex-1 border rounded px-3 py-1.5 text-sm"/><button id="chatSend" class="bg-black text-white px-4 py-1.5 rounded text-sm">Send</button></div></div>
+  </div>
+</div>
+<footer class="text-center text-xs text-gray-400 py-3 border-t bg-white">Deterministic: IfcOpenShell · LLM: tool router → explanation · HKU DUPAD Ref.536608</footer>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+let elements = [];
+let selectedGuid = null;
+let scene, camera, renderer, controls;
+
+function initThree(){
+  const container = document.getElementById('viewer');
+  scene = new THREE.Scene(); scene.background = new THREE.Color(0xf6f7f9);
+  camera = new THREE.PerspectiveCamera(45, container.clientWidth/520, 0.1, 1000);
+  camera.position.set(8,10,8);
+  renderer = new THREE.WebGLRenderer({antialias:true});
+  renderer.setSize(container.clientWidth, 520);
+  container.innerHTML=''; container.appendChild(renderer.domElement);
+  controls = new OrbitControls(camera, renderer.domElement);
+  scene.add(new THREE.GridHelper(20,20,0xe5e7eb,0xf3f4f6));
+  scene.add(new THREE.AmbientLight(0xffffff,0.7));
+  const dir = new THREE.DirectionalLight(0xffffff,0.8); dir.position.set(10,10,5); scene.add(dir);
+  window.addEventListener('resize', ()=>{ renderer.setSize(container.clientWidth,520); camera.aspect=container.clientWidth/520; camera.updateProjectionMatrix();});
+  animate();
+}
+function animate(){ requestAnimationFrame(animate); controls.update(); renderer.render(scene,camera); }
+function clearScene(){
+  // remove meshes except grid/light
+  const toRemove=[]; scene.traverse(o=>{ if(o.isMesh) toRemove.push(o);}); toRemove.forEach(o=>scene.remove(o));
+}
+function renderElements(){
+  clearScene();
+  elements.slice(0,40).forEach((el,i)=>{
+    const p = el.placement || {x:(i%6)*2, y:Math.floor(i/6)*2, z:0};
+    let color=0xd1d5db;
+    if(el.type==='IfcWall') color=0x94a3b8;
+    if(el.type==='IfcDoor') color = (el.width && el.width*1000<750)?0xf97316:0x22c55e;
+    if(el.type==='IfcBeam') color=0xa78bfa;
+    if(el.type==='IfcPipeSegment' || el.type==='IfcFlowSegment') color=0x38bdf8;
+    const isSel = selectedGuid && el.guid===selectedGuid;
+    const geom = new THREE.BoxGeometry(1,0.6,1);
+    const mat = new THREE.MeshStandardMaterial({color: isSel?0xef4444:color, emissive: isSel?0xffaaaa:0x000000});
+    const mesh = new THREE.Mesh(geom, mat);
+    mesh.position.set(p.x, p.z+0.5, -p.y);
+    mesh.userData = el;
+    scene.add(mesh);
+  });
+}
+initThree();
+
+async function fetchSummary(){
+  const mw=document.getElementById('minWidth').value;
+  const r=await fetch(`/api/summary?min_width=${mw}`);
+  if(!r.ok) throw new Error(await r.text());
+  const j=await r.json();
+  updateScore(j);
+  return j;
+}
+async function fetchElements(){
+  const r=await fetch('/api/elements?limit=100');
+  if(r.ok){ const j=await r.json(); elements=j.elements||[]; renderElements(); document.getElementById('loaded').textContent=`Loaded: ${elements.length} elements`;}
+}
+function updateScore(s){
+  document.getElementById('scoreCard').classList.remove('hidden');
+  document.getElementById('noModel').classList.add('hidden');
+  document.getElementById('issues').classList.remove('hidden');
+  document.getElementById('scoreVal').textContent=s.score;
+  const circle=document.getElementById('scoreCircle'); circle.textContent=s.score; circle.className=`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold ${s.score>=80?'bg-green-600':s.score>=50?'bg-amber-500':'bg-red-600'}`;
+  document.getElementById('doorStat').textContent=`${s.doors.passed} passed · ${s.doors.failed} failed`;
+  document.getElementById('doorSub').textContent=`${s.doors.total} checked · ≥${s.min_width}mm`;
+  document.getElementById('clashStat').textContent=`${s.clashes.count} clashes`;
+  const list=document.getElementById('issuesList'); list.innerHTML='';
+  const fails=s.doors.results.filter(d=>d.status==='fail');
+  if(fails.length===0 && s.clashes.results.length===0) list.innerHTML='<div class="p-4 text-sm text-green-600">✓ No violations</div>';
+  fails.forEach(d=>{
+    const div=document.createElement('div'); div.className='p-3 flex items-start justify-between hover:bg-gray-50';
+    div.innerHTML=`<div><div class="text-sm font-medium flex items-center gap-2"><span class="bg-red-100 text-red-700 text-xs px-1.5 py-0.5 rounded">FAIL</span>${d.name} <span class="text-xs text-gray-500">${d.guid.slice(0,8)}</span></div><div class="text-xs text-gray-600 mt-1">Exit door too narrow</div><div class="text-xs text-red-600">${d.measured_mm} mm < ${d.required_mm} mm (Δ ${d.delta_mm} mm)</div><div class="text-[11px] text-gray-400">${d.rule}</div></div><div class="flex flex-col gap-1"><button class="locate text-xs border px-2 py-1 rounded hover:bg-black hover:text-white">Locate</button><button class="explain text-xs border px-2 py-1 rounded hover:bg-black hover:text-white">Explain</button></div>`;
+    div.querySelector('.locate').onclick=()=>{ selectedGuid=d.guid; document.getElementById('selInfo').textContent=`Selected: ${d.guid.slice(0,8)}`; renderElements(); };
+    div.querySelector('.explain').onclick=async()=>{
+      const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:`Why is door ${d.name} (${d.guid}) a problem? width ${d.measured_mm} required ${d.required_mm}`,min_width:s.min_width})});
+      const j=await r.json(); showExplain(j.reply);
+    };
+    list.appendChild(div);
+  });
+  s.clashes.results.forEach(c=>{
+    const div=document.createElement('div'); div.className='p-3 flex items-start justify-between hover:bg-gray-50';
+    div.innerHTML=`<div><div class="text-sm font-medium flex items-center gap-2"><span class="text-xs px-1.5 py-0.5 rounded ${c.severity==='high'?'bg-red-100 text-red-700':c.severity==='medium'?'bg-amber-100 text-amber-700':'bg-gray-100'}">${c.severity}</span>${c.a_name} × ${c.b_name}</div><div class="text-xs text-gray-600">${c.a_type} × ${c.b_type}</div><div class="text-xs text-red-600">${c.penetration_mm} mm penetration</div></div><div class="flex flex-col gap-1"><button class="locate text-xs border px-2 py-1 rounded hover:bg-black hover:text-white">Locate</button><button class="explain text-xs border px-2 py-1 rounded hover:bg-black hover:text-white">Explain</button></div>`;
+    div.querySelector('.locate').onclick=()=>{ selectedGuid=c.a_guid; document.getElementById('selInfo').textContent=`Selected: ${c.a_guid.slice(0,8)}`; renderElements(); };
+    div.querySelector('.explain').onclick=async()=>{
+      const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:`Explain clash ${c.a_guid} x ${c.b_guid} penetration ${c.penetration_mm}mm`,min_width:s.min_width})});
+      const j=await r.json(); showExplain(j.reply);
+    };
+    list.appendChild(div);
+  });
+}
+function showExplain(txt){ const box=document.getElementById('explainBox'); box.textContent=txt; box.classList.remove('hidden'); }
+
+document.getElementById('fileInput').addEventListener('change', async e=>{
+  const file=e.target.files[0]; if(!file) return;
+  const fd=new FormData(); fd.append('file',file);
+  try{
+    const r=await fetch('/api/upload',{method:'POST',body:fd}); if(!r.ok) throw new Error(await r.text());
+    const j=await r.json(); document.getElementById('loaded').textContent=`Loaded: ${j.filename} · ${JSON.stringify(j.counts)}`;
+    document.getElementById('error').classList.add('hidden');
+    await fetchSummary(); await fetchElements();
+  }catch(err){ const box=document.getElementById('error'); box.textContent=err.message; box.classList.remove('hidden');}
+});
+document.getElementById('minWidth').addEventListener('change', async()=>{ try{ await fetchSummary();}catch{}} );
+document.getElementById('loadSample').addEventListener('click', async()=>{
+  // try to fetch summary without upload (backend already has demo loaded if we pre-load)
+  try{ await fetchSummary(); await fetchElements(); document.getElementById('error').classList.add('hidden');}
+  catch(e){ const box=document.getElementById('error'); box.textContent=e.message+' — please Upload sample-ifc/BIMGuard_Demo.ifc'; box.classList.remove('hidden');}
+});
+document.getElementById('chatSend').addEventListener('click', sendChat);
+document.getElementById('chatInput').addEventListener('keydown', e=>{ if(e.key==='Enter') sendChat();});
+async function sendChat(){
+  const input=document.getElementById('chatInput'); const msg=input.value.trim(); if(!msg) return;
+  const log=document.getElementById('chatLog');
+  const u=document.createElement('div'); u.className='bg-black text-white p-2 rounded max-w-[90%] ml-auto text-xs'; u.textContent=msg; log.appendChild(u);
+  input.value='';
+  const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg, min_width: document.getElementById('minWidth').value})});
+  const j=await r.json();
+  const a=document.createElement('div'); a.className='bg-gray-100 p-2 rounded text-xs whitespace-pre-wrap'; a.textContent=j.reply; log.appendChild(a); log.scrollTop=log.scrollHeight;
+}
+// try auto-load summary on start
+fetchSummary().then(()=>fetchElements()).catch(()=>{});
+</script>
+</body>
+</html>
