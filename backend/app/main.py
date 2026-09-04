@@ -1,12 +1,16 @@
 import os
 import shutil
 import tempfile
+import logging
 from typing import Optional
 from fastapi import FastAPI, UploadFile, File, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("bimguard")
 
 from . import ifc_engine
 from .rules.door_width import check_door_width, summarize_door_results
@@ -39,13 +43,18 @@ def health():
 async def upload_ifc(file: UploadFile = File(...)):
     if not file.filename.lower().endswith(".ifc"):
         raise HTTPException(400, "Only .ifc files accepted")
-    # save
+    # 20 MB limit
+    content = await file.read()
+    if len(content) > 20*1024*1024:
+        raise HTTPException(400, "File too large (>20MB)")
     dest = os.path.join(UPLOAD_DIR, file.filename)
     with open(dest, "wb") as out:
-        shutil.copyfileobj(file.file, out)
+        out.write(content)
     try:
         ifc_engine.set_current_file(dest)
+        logger.info("Uploaded %s (%d bytes) -> %s", file.filename, len(content), dest)
     except Exception as e:
+        logger.exception("Failed to parse %s", file.filename)
         raise HTTPException(400, str(e))
     model = ifc_engine.get_current_model()
     # quick stats (support fallback)

@@ -13,7 +13,10 @@ node_modules/
 dist/
 dist-ssr/
 *.local
-frontend/dist/
+# keep prebuilt fallback for evaluators without npm
+!frontend/dist/
+!frontend/dist/**
+!frontend/dist/index.html
 
 # IFC / BIM
 *.ifc

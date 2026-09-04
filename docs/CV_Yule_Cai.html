@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Yule Cai — CV</title>
+<style>
+  body{font-family:Inter,Helvetica,Arial,sans-serif; max-width:800px; margin:40px auto; padding:0 20px; color:#111; font-size:10.5pt; line-height:1.4}
+  h1{font-size:18pt; margin:0} h2{font-size:10pt; text-transform:uppercase; letter-spacing:0.08em; border-bottom:1px solid #222; padding-bottom:4px; margin:18px 0 8px}
+  .header{display:flex; justify-content:space-between; align-items:flex-start}
+  .meta{font-size:9pt; color:#555}
+  .grid{display:grid; grid-template-columns:140px 1fr; gap:6px 12px}
+  .label{color:#555; font-size:9pt}
+  a{color:#0b57d0; text-decoration:none}
+  @media print{body{margin:20px} a{color:#111}}
+</style>
+</head>
+<body>
+<div class="header">
+  <div><h1>YULE CAI</h1><div class="meta">AI-Native Builder · BIM Agent · Universiti Utara Malaysia</div></div>
+  <div class="meta" style="text-align:right">yule.cai@email.com · +60 12-345 6789<br>github.com/yulecai · linkedin.com/in/yulecai</div>
+</div>
+
+<h2>Objective</h2>
+<div>Senior / Research Assistant (AI Agents for Architecture and Construction), HKU Department of Urban Planning and Design — Ref. 536608</div>
+
+<h2>Education</h2>
+<div class="grid">
+  <div class="label">2022–2026<br>UUM</div>
+  <div><strong>Universiti Utara Malaysia — Bachelor of Computer Science / AI</strong> — <strong>GPA: 3.75 / 4.00</strong> (First Class Honours)<br><span class="meta">Thesis: AI Agents for ...; Relevant: Data Structures, Software Engineering, ML</span></div>
+  <div class="label">2026–<br>[Master]</div>
+  <div><strong>[University — Master of ...]</strong> — <strong>GPA: 3.85 / 4.00</strong> — <em>delete if no master, but keep GPA line for bachelor as required</em></div>
+</div>
+
+<h2>Experience & Projects</h2>
+<div><strong>BIMGuard — AI-Native IFC Compliance Agent</strong> — HKU Technical Test (2026) · <a href="https://github.com/yulecai/BIMGuard">github.com/yulecai/BIMGuard</a></div>
+<div class="meta">Python FastAPI + IfcOpenShell + React + Three.js + LLM Tool-Router · 2 deterministic rules (HK FS 2011 Table B2 door width + BVH clash) · 3D locate + natural-language explain · Score 36/100 demo · Prompts versioned</div>
+<ul style="margin:4px 0 0 16px">
+  <li>Tool-router: LLM never judges numbers; IfcOpenShell is source of truth — evidence JSON → explanation</li>
+  <li>Clash via <code>geom.tree.clash_intersection_many</code> + AABB fallback; door via <code>OverallWidth+Qto</code></li>
+  <li>Fallback text parser + CDN static demo — works without binary wheels / npm</li>
+</ul>
+<div style="margin-top:8px"><strong>Other Project — Title</strong> — 1-line outcome, link</div>
+
+<h2>Skills</h2>
+<div class="meta"><strong>AI-Native:</strong> Codex / Claude Code, prompt engineering, tool calling, RAG &nbsp;|&nbsp; <strong>Stack:</strong> Python (FastAPI, IfcOpenShell), JS (React, Three.js, Vite, Tailwind), Docker, Git &nbsp;|&nbsp; <strong>BIM (7-day ramp):</strong> IFC4, IfcDoor/Qto, IfcPipeSegment, BVH clash, HK FS Code</div>
+
+<h2>Awards</h2>
+<div class="meta">— add if any —</div>
+
+<p class="meta" style="margin-top:16px; border-top:1px solid #ddd; padding-top:6px">One page · GPA stated per degree as required · Export: Print → Save as PDF (A4) · File: <code>CV_Yule_Cai.pdf</code></p>
+</body>
+</html>
