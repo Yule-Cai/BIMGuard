@@ -25,6 +25,9 @@ def _test_project_unit_conversion():
         print("- unit-scale test skipped (IfcOpenShell not installed)")
         return
 
+    # IFC4 IfcDoor inherited attributes 1..8 are followed by OverallHeight (9)
+    # and OverallWidth (10). The fixture therefore stores 680 as project-mm in
+    # the actual OverallWidth slot, with project LENGTHUNIT=MILLI/METRE.
     mm_ifc = """ISO-10303-21;
 HEADER;
 FILE_DESCRIPTION(('BIMGuard unit test'),'2;1');
@@ -38,7 +41,7 @@ DATA;
 #31=IFCSIUNIT(*,.LENGTHUNIT.,.MILLI.,.METRE.);
 #30=IFCUNITASSIGNMENT((#31));
 #10=IFCPROJECT('0UnitScaleProject00000',$,'Unit Test',$,$,$,$,(#20),#30);
-#140=IFCDOOR('0UnitScaleDoor000000000',$,'D-MM','D-MM',$,$,680.,2100.,$,$,$,$);
+#140=IFCDOOR('0UnitScaleDoor000000000',$,'D-MM',$,$,$,$,'D-MM',2100.,680.,$,$,$);
 ENDSEC;
 END-ISO-10303-21;
 """
