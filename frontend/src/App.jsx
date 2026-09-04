@@ -18,7 +18,6 @@ export default function App() {
       if (!r.ok) throw new Error(await r.text())
       const j = await r.json()
       setSummary(j)
-      // also fetch elements for viewer
       const er = await fetch('/api/elements?limit=100')
       if (er.ok) {
         const ej = await er.json()
@@ -47,18 +46,23 @@ export default function App() {
   }
 
   const handleExplain = async (issue) => {
-    // trigger chat
     return `Explain ${issue.name || issue.guid} : ${JSON.stringify(issue).slice(0,300)}`
   }
 
   useEffect(() => {
-    // try load summary if model already exists
     fetchSummary().catch(()=>{})
   }, [])
 
+  const failedDoorGuids = new Set(
+    (summary?.doors?.results || []).filter(d => d.status === 'fail').map(d => d.guid)
+  )
+  const firstClashMethod = summary?.clashes?.results?.[0]?.method
+  const clashMethodLabel = firstClashMethod === 'synthetic_aabb_fallback'
+    ? 'Labelled synthetic demo fallback'
+    : 'IfcOpenShell BVH for real geometry'
+
   return (
     <div className="min-h-screen flex flex-col">
-      {/* Header */}
       <header className="sticky top-0 z-10 bg-white border-b px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-black text-white flex items-center justify-center font-bold rounded">BG</div>
@@ -85,20 +89,17 @@ export default function App() {
       {fileName && <div className="mx-6 mt-3 text-xs text-gray-500">Loaded: {fileName} · {elements.length} elements</div>}
 
       <div className="flex-1 grid grid-cols-12 gap-4 p-4">
-        {/* Viewer */}
         <div className="col-span-7 bg-white rounded-xl border overflow-hidden flex flex-col">
           <div className="px-4 py-2 border-b flex items-center justify-between">
-            <span className="font-medium text-sm">3D Viewer</span>
-            <span className="text-xs text-gray-500">{selectedGuid ? `Selected: ${selectedGuid.slice(0,8)}` : 'Click issue → Locate'}</span>
+            <span className="font-medium text-sm">3D Element Locator</span>
+            <span className="text-xs text-gray-500">{selectedGuid ? `Selected: ${selectedGuid.slice(0,8)}` : 'Schematic placement view · click issue → Locate'}</span>
           </div>
           <div className="flex-1 min-h-[520px]">
-            <Viewer elements={elements} selectedGuid={selectedGuid} />
+            <Viewer elements={elements} selectedGuid={selectedGuid} failedDoorGuids={failedDoorGuids} />
           </div>
         </div>
 
-        {/* Right panel */}
         <div className="col-span-5 flex flex-col gap-4">
-          {/* Score + Rule cards */}
           {summary ? (
             <>
               <div className="bg-white rounded-xl border p-4">
@@ -118,7 +119,7 @@ export default function App() {
                   <div className="border rounded-lg p-3">
                     <div className="text-xs text-gray-500">Geometry Clash</div>
                     <div className="text-sm font-medium">{summary.clashes.count} clashes</div>
-                    <div className="text-xs text-gray-400">{summary.doors.total ? '21 checked' : '—'} · BVH + AABB</div>
+                    <div className="text-xs text-gray-400">{clashMethodLabel}</div>
                   </div>
                 </div>
               </div>
@@ -128,7 +129,7 @@ export default function App() {
           ) : (
             <div className="bg-white rounded-xl border p-8 text-center text-sm text-gray-500">
               Upload an .ifc to see compliance results.<br/>
-              <span className="text-xs">Try sample-ifc/BIMGuard_Demo.ifc (D-102 fail + 1 clash)</span>
+              <span className="text-xs">Try sample-ifc/BIMGuard_Demo.ifc (D-102 fail + 1 labelled synthetic clash)</span>
             </div>
           )}
 
@@ -137,7 +138,7 @@ export default function App() {
       </div>
 
       <footer className="text-center text-xs text-gray-400 py-3 border-t bg-white">
-        Deterministic engine: IfcOpenShell · LLM: tool router + evidence → explanation · HKU DUPAD Ref.536608
+        Deterministic engine: IfcOpenShell · LLM: grounded explanation · HKU DUPAD Ref.536608
       </footer>
     </div>
   )

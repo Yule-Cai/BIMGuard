@@ -1,44 +1,78 @@
-# BIMGuard — 3-Minute Walkthrough Script (for screen recording)
+# BIMGuard — 3-Minute Walkthrough Script
 
-Total target: 2:30, leave 30s buffer.
-
----
-
-**0:00–0:15 — Intro (screen: README + header)**
-- "Hi, I'm Yule Cai — this is BIMGuard, my HKU AI+BIM micro-prototype."
-- "One upload → deterministic checks → AI explanation + 3D locate. Two rules, as requested."
-- Show repo structure briefly, then open http://localhost:8000/
-
-**0:15–0:45 — Upload (screen: http://localhost:8000/)**
-- Click "Upload .ifc" → select `sample-ifc/BIMGuard_Demo.ifc`
-- Narrate: "This is a synthetic IFC: 4 walls, 3 doors, 1 beam × 1 pipe. D-102 is 680mm (fail), others pass. Beam and pipe clash."
-- Show counts appear: `Loaded: 9 elements`, Compliance Score pops.
-
-**0:45–1:15 — Rule Cards + Issues (screen: right panel)**
-- Point to `Compliance Score 36/100`, `Exit Door Width 2 passed · 1 failed`, `Geometry Clash 1 clashes`
-- Scroll `Critical Issues`: D-102 680 < 750 (Δ -70), B-017 × P-042 100mm high.
-- Click `[Locate]` on D-102 → 3D viewer highlights orange door, camera orbits.
-- Click `[Locate]` on clash → highlights beam/pipe.
-
-**1:15–1:45 — Explain via Agent (screen: Issues → Explain)**
-- Click `[Explain]` on D-102 → show chat reply: "fails HK FS Code 2011 Table B2 ... increase by 70mm"
-- Emphasize architecture: "LLM didn't judge width — IfcOpenShell did. LLM only explains with evidence."
-- Show `prompts/system.md` for 2 seconds: tool-router, never hallucinate.
-
-**1:45–2:15 — Chat (screen: Ask BIMGuard)**
-- Type: `Show me all serious violations`
-  → agent replies with summary table + both issues (tool: get_summary + check_exit_door_width + detect_clashes)
-- Type: `Why is D-102 a problem?` → reply cites GUID, measured vs required, rule.
-- Type: `any clashes?` → reply lists B-017 × P-042 penetration + fix suggestion.
-
-**2:15–2:30 — Engineering Taste + Close (screen: API docs)**
-- Quick show `http://localhost:8000/docs` → `/api/summary`, `/api/chat`, `/api/tools`
-- Mention: "Clash via BVH `clash_intersection_many` with AABB fallback; door via OverallWidth + Qto; IFC→GLB ready for Three.js; fallback parser works without ifcopenshell."
-- "Code + prompts + sample IFC are in the repo. Thanks!"
+Target: ~2:30, leaving ~30s buffer.
 
 ---
 
-**Recording tips:**
-- Use 1080p, no mic echo, add captions if needed.
-- Keep mouse slow, zoom 125% for readability.
-- Export <50MB, upload to YouTube unlisted or Drive.
+## 0:00–0:15 — Intro
+
+Screen: README + app header.
+
+- "Hi, I'm Yule Cai. This is BIMGuard, my HKU AI+BIM micro-prototype."
+- "It performs two focused IFC checks: exit-door width and structural/MEP clash detection."
+- "The design principle is deterministic checks first, AI explanation second."
+
+## 0:15–0:45 — Upload controlled demo
+
+Screen: `http://localhost:8000/`.
+
+- Upload `sample-ifc/BIMGuard_Demo.ifc`.
+- "This controlled sample contains three doors plus one beam/pipe demo conflict. D-102 is 680 mm, so it fails the selected 750 mm threshold."
+- Point out that the left panel is a **schematic 3D element locator**, not full IFC shape rendering.
+
+## 0:45–1:15 — Rule results + evidence
+
+- Show `Exit Door Width 2 passed · 1 failed`.
+- Show D-102: `680 mm < 750 mm`, deficit `70 mm`.
+- Show the clash issue.
+- Point to the clash method label: the tiny repository demo has no shape representation, so its conflict is explicitly labelled `synthetic_aabb_fallback`.
+- Click `[Locate]` to highlight D-102, then the clash element.
+
+Narration:
+
+> "I deliberately label the synthetic fallback instead of pretending this demo file contains production geometry. For real IFC files with shape representations, BIMGuard uses IfcOpenShell's geometry iterator, builds a BVH tree, and calls `clash_intersection_many`."
+
+## 1:15–1:45 — Explain with AI
+
+- Click `[Explain]` on D-102.
+- Show response containing measured value, selected threshold, rule, and proposed next action.
+- Briefly show `prompts/system.md`.
+
+Narration:
+
+> "The language model never calculates the width or geometry. The backend runs deterministic checks first and supplies Evidence JSON. The model only explains that evidence."
+
+## 1:45–2:10 — Natural-language interaction
+
+Type one or two questions only:
+
+```text
+Why is D-102 a problem?
+Show me all serious violations.
+```
+
+Point out that the reply preserves measured values / GUIDs from the rule outputs.
+
+## 2:10–2:30 — Engineering decisions + close
+
+Screen: README / source / API docs.
+
+Mention three implementation decisions:
+
+1. "IFC units are read from the project definition with `calculate_unit_scale()` instead of guessing from the magnitude."
+2. "Real geometric clashes use the documented IfcOpenShell BVH path. The heuristic AABB path is restricted to the named synthetic sample only."
+3. "The scope is intentionally two rules rather than many shallow checks."
+
+Close:
+
+> "The repository includes code, prompts, regression tests, an external-IFC smoke-test utility, and the demo data. Thank you."
+
+---
+
+## Recording tips
+
+- Record at 1080p.
+- Keep the browser zoom around 110–125% for readable evidence.
+- Do not spend time scrolling through every file.
+- Make the difference between **controlled synthetic demo** and **real IFC BVH geometry checking** explicit once; that is an engineering-strength point, not a weakness.
+- Keep final video under 3 minutes.
