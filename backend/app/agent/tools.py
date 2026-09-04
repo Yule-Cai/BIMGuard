@@ -81,12 +81,26 @@ def call_tool(name: str, args: dict = None):
 def _mock_explain(message: str, min_width=750):
     """Deterministic mock when no LLM key set — still tool-grounded."""
     msg = message.lower()
+    # Anti-hallucination: unsupported rules
+    if "sprinkler" in msg:
+        return "BIMGuard currently does not implement a sprinkler compliance rule. Implemented rules: 1) Exit door width (HK FS Code 2011 Table B2), 2) Structural/MEP clash (BVH). Ask about doors (e.g., 'Why is D-102 a problem?') or clashes (e.g., 'Are there any clashes?')."
+    if "firerating" in msg or "fire rating" in msg:
+        # FireRating is a property, not a compliance rule — explain what we have
+        doors_data = call_tool("check_exit_door_width", {"min_width": min_width})
+        # try to find D-102 or any door
+        for d in doors_data["results"]:
+            if "102" in d["name"].lower() or "102" in msg:
+                # get psets
+                psets = call_tool("get_element_properties", {"guid": d["guid"]})
+                fr = psets.get("psets", {}).get("Pset_DoorCommon", {}).get("FireRating", "not specified")
+                return f"Door {d['name']} FireRating: {fr} (from Pset_DoorCommon). Note: FireRating is model data, not a compliance check currently implemented."
+        return "FireRating is available as Pset_DoorCommon.FireRating when present in the model, but BIMGuard does not currently check FireRating compliance against a code."
     doors_data = call_tool("check_exit_door_width", {"min_width": min_width})
     clashes_data = call_tool("detect_clashes", {})
     summary = call_tool("get_summary", {"min_width": min_width})
 
     # Decide intent by keywords
-    wants_doors = any(k in msg for k in ["door", "width", "exit", "750", "850", "fire", "hk"])
+    wants_doors = any(k in msg for k in ["door", "width", "exit", "750", "850", "fire", "hk"]) or bool(re.search(r"d-\d+", msg))
     wants_clash = any(k in msg for k in ["clash", "pipe", "beam", "intersect", "collision", "penetration"])
     wants_all = any(k in msg for k in ["all", "serious", "critical", "violation", "fail", "issue", "summary", "score"])
 
@@ -114,15 +128,26 @@ def _mock_explain(message: str, min_width=750):
         return "\n".join(lines)
 
     if wants_doors:
-        fails = [d for d in doors_data["results"] if d["status"]=="fail"]
-        if "d-102" in msg or "102" in msg:
-            # specific
+        # Generic door-specific query: if message mentions a door name like D-101, D-102 etc., answer specifically
+        door_match = re.search(r"d-\d+", msg)
+        if door_match:
+            qname = door_match.group(0).upper()
             for d in doors_data["results"]:
-                if "102" in d["name"] or "102" in d["tag"]:
-                    if d["status"]=="fail":
+                if d["name"].upper() == qname or d["tag"].upper() == qname:
+                    if d["status"] == "fail":
                         return f"Door **{d['name']}** (GUID {d['guid']}) fails HK FS Code 2011 Table B2: measured {d['measured_mm']}mm < required {d['required_mm']}mm (Δ {d['delta_mm']}mm). **Fix:** increase clear opening by {abs(d['delta_mm'])}mm."
+                    elif d["status"] == "pass":
+                        return f"Door **{d['name']}** is compliant: {d['measured_mm']}mm ≥ {d['required_mm']}mm ({d['rule']})."
                     else:
+                        return f"Door **{d['name']}** has unknown status: no width data found ({d.get('reason','')})."
+            # if numeric like 101, 102 mentioned without D-
+            for d in doors_data["results"]:
+                if any(num in d["name"] for num in re.findall(r"\d+", msg)):
+                    if d["status"] == "fail":
+                        return f"Door **{d['name']}** (GUID {d['guid']}) fails HK FS Code 2011 Table B2: measured {d['measured_mm']}mm < required {d['required_mm']}mm (Δ {d['delta_mm']}mm). **Fix:** increase clear opening by {abs(d['delta_mm'])}mm."
+                    elif d["status"] == "pass":
                         return f"Door **{d['name']}** is compliant: {d['measured_mm']}mm ≥ {d['required_mm']}mm."
+        fails = [d for d in doors_data["results"] if d["status"]=="fail"]
         if fails:
             lines.append(f"Found {len(fails)} door(s) below {min_width}mm:")
             for f in fails:

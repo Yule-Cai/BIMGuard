@@ -29,9 +29,9 @@ def create_sample(out_path, doors_cfg=None, do_clash=True):
     building = ifcopenshell.api.run("root.create_entity", model, ifc_class="IfcBuilding", name="Building A")
     storey = ifcopenshell.api.run("root.create_entity", model, ifc_class="IfcBuildingStorey", name="Level 01")
     # Aggregate
-    ifcopenshell.api.run("aggregate.assign_object", model, relating_object=project, product=site)
-    ifcopenshell.api.run("aggregate.assign_object", model, relating_object=site, product=building)
-    ifcopenshell.api.run("aggregate.assign_object", model, relating_object=building, product=storey)
+    ifcopenshell.api.run("aggregate.assign_object", model, relating_object=project, products=[site])
+    ifcopenshell.api.run("aggregate.assign_object", model, relating_object=site, products=[building])
+    ifcopenshell.api.run("aggregate.assign_object", model, relating_object=building, products=[storey])
 
     # Owner history minimal
     # Create walls - simple placements
@@ -42,14 +42,13 @@ def create_sample(out_path, doors_cfg=None, do_clash=True):
         ("W-03", (10,10,0), (0,10,0)),
         ("W-04", (0,10,0), (0,0,0)),
     ]
+    import numpy as np
     for name, start, end in wall_coords:
         wall = ifcopenshell.api.run("root.create_entity", model, ifc_class="IfcWall", name=name)
-        # placement at start
-        mat = [[1,0,0,start[0]],[0,1,0,start[1]],[0,0,1,start[2]],[0,0,0,1]]
-        # create local placement
-        placement = ifcopenshell.api.run("geometry.create_placement", model, point=start)
-        wall.ObjectPlacement = placement
-        ifcopenshell.api.run("spatial.assign_container", model, relating_structure=storey, product=wall)
+        mat = np.eye(4)
+        mat[0,3], mat[1,3], mat[2,3] = start
+        ifcopenshell.api.run("geometry.edit_object_placement", model, product=wall, matrix=mat, is_si=True)
+        ifcopenshell.api.run("spatial.assign_container", model, products=[wall], relating_structure=storey)
         walls.append(wall)
 
     # Doors
@@ -58,27 +57,28 @@ def create_sample(out_path, doors_cfg=None, do_clash=True):
         door.OverallWidth = width_m
         door.OverallHeight = height_m
         door.Tag = name
-        # placement
-        placement = ifcopenshell.api.run("geometry.create_placement", model, point=pos)
-        door.ObjectPlacement = placement
-        ifcopenshell.api.run("spatial.assign_container", model, relating_structure=storey, product=door)
+        mat = np.eye(4)
+        mat[0,3], mat[1,3], mat[2,3] = pos
+        ifcopenshell.api.run("geometry.edit_object_placement", model, product=door, matrix=mat, is_si=True)
+        ifcopenshell.api.run("spatial.assign_container", model, products=[door], relating_structure=storey)
         # Add Pset for redundancy
         pset = ifcopenshell.api.run("pset.add_pset", model, product=door, name="Pset_DoorCommon")
         ifcopenshell.api.run("pset.edit_pset", model, pset=pset, properties={"FireRating": "60min", "IsExternal": False})
 
-    # Beam + Pipe that clash (same position)
+    # Beam + Pipe that clash (same position) — intentionally without shape for demo fallback
     beam = ifcopenshell.api.run("root.create_entity", model, ifc_class="IfcBeam", name="B-017")
     beam.Tag = "B-017"
-    placement_b = ifcopenshell.api.run("geometry.create_placement", model, point=(2, 2, 2.0))
-    beam.ObjectPlacement = placement_b
-    ifcopenshell.api.run("spatial.assign_container", model, relating_structure=storey, product=beam)
+    mat_b = np.eye(4)
+    mat_b[0,3], mat_b[1,3], mat_b[2,3] = (2, 2, 2.0)
+    ifcopenshell.api.run("geometry.edit_object_placement", model, product=beam, matrix=mat_b, is_si=True)
+    ifcopenshell.api.run("spatial.assign_container", model, products=[beam], relating_structure=storey)
 
     pipe = ifcopenshell.api.run("root.create_entity", model, ifc_class="IfcPipeSegment", name="P-042")
     pipe.Tag = "P-042"
-    # Place pipe at similar location to induce clash (AABB overlap)
-    placement_p = ifcopenshell.api.run("geometry.create_placement", model, point=(2.5, 2, 2.1))
-    pipe.ObjectPlacement = placement_p
-    ifcopenshell.api.run("spatial.assign_container", model, relating_structure=storey, product=pipe)
+    mat_p = np.eye(4)
+    mat_p[0,3], mat_p[1,3], mat_p[2,3] = (2.5, 2, 2.1)
+    ifcopenshell.api.run("geometry.edit_object_placement", model, product=pipe, matrix=mat_p, is_si=True)
+    ifcopenshell.api.run("spatial.assign_container", model, products=[pipe], relating_structure=storey)
 
     # Write
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)

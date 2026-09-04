@@ -101,25 +101,55 @@ def _parse_fallback_ifc(path: str):
         pass
     return elements
 
+def _is_valid_ifc_file(path: str) -> bool:
+    """Check if file looks like IFC (contains ISO-10303-21 and FILE_SCHEMA)."""
+    try:
+        with open(path, 'r', encoding='utf-8', errors='ignore') as f:
+            head = f.read(4096)
+            return "ISO-10303-21" in head and "FILE_SCHEMA" in head
+    except:
+        return False
+
 def set_current_file(path: str):
     global _current_path
+    # Validate IFC header before parsing
+    if not _is_valid_ifc_file(path):
+        raise ValueError("File does not appear to be a valid IFC (missing ISO-10303-21 header)")
     _current_path = path
     if path not in _cache:
         if HAS_IFC:
             try:
-                _cache[path] = ifcopenshell.open(path)
+                model = ifcopenshell.open(path)
+                # Validate that it has at least one IfcProject or IfcProduct
+                try:
+                    has_project = len(model.by_type("IfcProject")) > 0
+                except:
+                    has_project = False
+                if not has_project:
+                    # Check if file has any Ifc entities via fallback count
+                    # If no project, treat as invalid
+                    raise ValueError("IFC file contains no IfcProject — possibly invalid or empty")
+                _cache[path] = model
+            except ValueError:
+                raise
             except Exception as e:
-                # try fallback
+                # try fallback for synthetic demo
                 try:
                     fallback_els = _parse_fallback_ifc(path)
+                    if not fallback_els:
+                        raise ValueError(f"Fallback parser found no elements: {e}")
                     _cache[path] = {"_fallback": True, "elements": fallback_els, "path": path}
                     _fallback_store[path] = fallback_els
+                except ValueError:
+                    raise
                 except Exception as e2:
                     raise ValueError(f"Failed to open IFC: {e} / fallback {e2}")
         else:
             # no ifcopenshell, use fallback
             try:
                 fallback_els = _parse_fallback_ifc(path)
+                if not fallback_els:
+                    raise ValueError("File contains no recognizable IFC entities")
                 _cache[path] = {"_fallback": True, "elements": fallback_els, "path": path}
                 _fallback_store[path] = fallback_els
             except Exception as e:
