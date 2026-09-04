@@ -1,8 +1,8 @@
 #!/bin/bash
-# BIMGuard one-click run (fallback no-build mode)
+# BIMGuard one-click lightweight demo mode
 set -e
 echo "=== BIMGuard ==="
-echo "Backend: FastAPI + IfcOpenShell (fallback parser if not installed)"
+echo "Backend: FastAPI; IfcOpenShell used when installed"
 echo "Frontend: static.html (no npm required) served by FastAPI"
 echo ""
 # ensure sample
@@ -11,14 +11,18 @@ if [ ! -f "sample-ifc/BIMGuard_Demo.ifc" ]; then
   python3 backend/scripts/generate_sample_ifc_fallback.py --out sample-ifc/BIMGuard_Demo.ifc
 fi
 echo "Sample: sample-ifc/BIMGuard_Demo.ifc"
-# install python deps (if not already)
+
+# Lightweight launcher installs only the web API dependencies. For real IFC
+# geometry/BVH checks use the full requirements.txt (which includes IfcOpenShell).
 pip3 install -q fastapi uvicorn python-multipart 2>&1 | tail -5 || true
-# try ifcopenshell (optional, fallback works without)
-pip3 show ifcopenshell >/dev/null 2>&1 || echo "Note: ifcopenshell not installed — using text fallback parser (still passes checks). Install with: pip install ifcopenshell or mamba install -c conda-forge ifcopenshell"
+if ! pip3 show ifcopenshell >/dev/null 2>&1; then
+  echo "Note: IfcOpenShell is not installed. The controlled BIMGuard_Demo.ifc can still use its labelled synthetic fallback, but arbitrary real IFC clash detection is disabled."
+  echo "For full geometry mode run: pip install -r backend/requirements.txt"
+fi
 
 echo ""
 echo "Starting backend at http://localhost:8000"
-echo "  - Static demo: http://localhost:8000/  (no build)"
+echo "  - Static demo: http://localhost:8000/"
 echo "  - API docs:    http://localhost:8000/docs"
 echo "  - Health:      http://localhost:8000/api/health"
 echo ""
