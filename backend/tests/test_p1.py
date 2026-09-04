@@ -30,16 +30,19 @@ def test_p1_1_diversity():
         print(f"✓ {os.path.basename(path)}: {result.stdout.splitlines()[0]}")
 
 def test_p1_2_performance():
-    """Measure parse + check time for small/medium IFC."""
+    """Measure cold vs warm parse + check time."""
     import ifcopenshell
     from backend.app.rules.door_width import check_door_width
     from backend.app.rules.clash import detect_clashes
     from backend.app import ifc_engine
 
-    sample = "sample-ifc/BIMGuard_Demo.ifc"
+    sample = os.path.abspath("sample-ifc/BIMGuard_Demo.ifc")
+    # Cold: clear cache
+    ifc_engine._cache.clear()
+    ifc_engine._current_path = None
     t0 = time.time()
-    ifc_engine.set_current_file(os.path.abspath(sample))
-    t_parse = time.time() - t0
+    ifc_engine.set_current_file(sample)
+    t_parse_cold = time.time() - t0
     model = ifc_engine.get_current_model()
     t1 = time.time()
     doors = check_door_width(model, 750)
@@ -47,13 +50,18 @@ def test_p1_2_performance():
     t2 = time.time()
     clashes = detect_clashes(model)
     t_clash = time.time() - t2
-    total = time.time() - t0
+    total_cold = time.time() - t0
+    # Warm: second call should be cache hit
+    t0w = time.time()
+    ifc_engine.set_current_file(sample)
+    t_parse_warm = time.time() - t0w
+    total_warm = time.time() - t0w
     elements = len(model.by_type("IfcProduct")) if hasattr(model, "by_type") else len(model.get("elements", []))
-    print(f"Model: {elements} IfcProducts | parse: {t_parse:.3f}s | door: {t_door:.3f}s | clash: {t_clash:.3f}s | total: {total:.3f}s")
-    assert total < 1.0, f"Small model should be <1s, got {total:.3f}s"
-    # Record for README
+    print(f"Model: {elements} products | cold parse: {t_parse_cold:.3f}s | warm parse: {t_parse_warm:.3f}s | door: {t_door:.3f}s | clash: {t_clash:.3f}s | total cold: {total_cold:.3f}s")
+    assert total_cold < 1.0, f"Small model cold should be <1s, got {total_cold:.3f}s"
+    # Record for README — report cold as conservative
     with open("/tmp/bimguard_perf.json", "w") as f:
-        json.dump({"elements": elements, "parse": t_parse, "door": t_door, "clash": t_clash, "total": total}, f)
+        json.dump({"elements": elements, "parse_cold": t_parse_cold, "parse_warm": t_parse_warm, "door": t_door, "clash": t_clash, "total_cold": total_cold}, f)
 
 def test_p1_3_repeatability():
     """Same IFC 5 times must give identical door/clash/score."""

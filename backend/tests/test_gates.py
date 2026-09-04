@@ -70,20 +70,19 @@ def test_gate_clean_install():
         assert "backend" in ci and "frontend" in ci
     print("✓ Gate clean install + CI")
 
-def test_gate_browser_demo():
-    # Check that static frontend and API would work
+def test_gate_browser_api_smoke():
+    """Browser/API smoke — honest: checks static + API, not automated Chrome console."""
     assert os.path.isfile("frontend/static.html")
     assert os.path.isfile("run.sh")
     assert os.access("run.sh", os.X_OK)
-    # Check that frontend static contains expected elements
     with open("frontend/static.html") as f:
         html = f.read()
         assert "BIMGuard" in html and "Ask BIMGuard" in html
-    # Check that API health would be available after run.sh (we test via TestClient)
+        assert "Schematic boxes" in html  # honest about not being full renderer
     from fastapi.testclient import TestClient
     from backend.app.main import app
     client = TestClient(app)
-    # Need to have sample loaded for browser demo, but health should work without
     r = client.get("/api/health")
     assert r.status_code==200
-    print("✓ Gate browser demo")
+    # Manual browser verification (console 0 red) should be done before video
+    print("✓ Gate browser/API smoke (manual console check still required)")

@@ -112,8 +112,13 @@ function updateScore(s){
   document.getElementById('scoreCard').classList.remove('hidden');
   document.getElementById('noModel').classList.add('hidden');
   document.getElementById('issues').classList.remove('hidden');
-  document.getElementById('scoreVal').textContent=s.score;
-  const circle=document.getElementById('scoreCircle'); circle.textContent=s.score; circle.className=`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold ${s.score>=80?'bg-green-600':s.score>=50?'bg-amber-500':'bg-red-600'}`;
+  const isNA = s.score===null || s.score===undefined || s.score_status==='not_applicable';
+  document.getElementById('scoreVal').textContent=isNA?'N/A':s.score;
+  const circle=document.getElementById('scoreCircle'); circle.textContent=isNA?'—':s.score; circle.className=`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold ${isNA?'bg-gray-400':s.score>=80?'bg-green-600':s.score>=50?'bg-amber-500':'bg-red-600'}`;
+  if(isNA){
+    document.getElementById('scoreVal').nextElementSibling.textContent='';
+    document.getElementById('scoreCircle').title='No applicable elements';
+  }
   document.getElementById('doorStat').textContent=`${s.doors.passed} passed · ${s.doors.failed} failed`;
   document.getElementById('doorSub').textContent=`${s.doors.total} checked · ≥${s.min_width}mm`;
   document.getElementById('clashStat').textContent=`${s.clashes.count} clashes`;

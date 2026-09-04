@@ -52,15 +52,22 @@ def call_tool(name: str, args: dict = None):
         passed = sum(1 for d in doors if d["status"]=="pass")
         failed = sum(1 for d in doors if d["status"]=="fail")
         total = len(doors)
-        score = 100
-        if total>0:
+        if total == 0 and len(clashes) == 0:
+            score = None
+            score_status = "not_applicable"
+        elif total == 0:
+            score = max(0, 100 - len(clashes)*15)
+            score_status = "no_doors"
+        else:
             score = int(100 * passed / total) if clashes==[] else int(100 * passed / total * 0.7)
             score = max(0, score - len(clashes)*10)
+            score_status = "ok"
         return {
             "min_width": min_w,
             "doors": {"total": total, "passed": passed, "failed": failed},
             "clashes": {"count": len(clashes)},
             "score": score,
+            "score_status": score_status,
             "rule": HK_RULE
         }
     elif name == "get_ifc_elements":
@@ -106,8 +113,13 @@ def _mock_explain(message: str, min_width=750):
 
     lines = []
     if wants_all or (not wants_doors and not wants_clash):
-        # full summary
-        lines.append(f"**Compliance Score: {summary['score']}/100** (threshold {min_width}mm)")
+        # full summary — handle N/A
+        score = summary['score']
+        score_status = summary.get('score_status', 'ok')
+        if score is None:
+            lines.append(f"**Compliance Score: N/A** (threshold {min_width}mm) — No applicable elements (no doors, no MEP/structural to clash)")
+        else:
+            lines.append(f"**Compliance Score: {score}/100** (threshold {min_width}mm)")
         lines.append(f"- Doors: {summary['doors']['passed']} passed / {summary['doors']['failed']} failed / {summary['doors']['total']} total")
         lines.append(f"- Clashes: {summary['clashes']['count']} detected")
         lines.append("")
@@ -124,7 +136,10 @@ def _mock_explain(message: str, min_width=750):
             for c in clashes[:5]:
                 lines.append(f"- **{c['a_name']} × {c['b_name']}** ({c['a_type']} × {c['b_type']}): {c['penetration_mm']}mm penetration, severity {c['severity']} — *Reroute or add opening*")
         if not fails and not clashes:
-            lines.append("No violations found for current threshold. Model is compliant.")
+            if score is None:
+                lines.append("No applicable elements to check (no doors, no clash candidates). Model is empty for current rules.")
+            else:
+                lines.append("No violations found for current threshold. Model is compliant.")
         return "\n".join(lines)
 
     if wants_doors:

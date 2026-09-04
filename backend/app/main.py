@@ -79,19 +79,25 @@ def summary(min_width: float = Query(750, description="Min door width mm")):
     doors = check_door_width(model, min_width)
     stats = summarize_door_results(doors)
     clashes = detect_clashes(model)
-    # score
+    # score: None when no applicable elements (more honest than 100)
     total = stats["total"]
     passed = stats["passed"]
-    if total == 0:
-        score = 100 if not clashes else max(0, 100 - len(clashes)*15)
+    if total == 0 and len(clashes) == 0:
+        score = None
+        score_status = "not_applicable"
+    elif total == 0:
+        score = max(0, 100 - len(clashes)*15)
+        score_status = "no_doors"
     else:
         base = 100 * passed / total if total else 100
         score = int(base * 0.7) if clashes else int(base)
         score = max(0, score - len(clashes)*10)
         score = min(100, score)
+        score_status = "ok"
     return {
         "min_width": min_width,
         "score": score,
+        "score_status": score_status,
         "doors": {"results": doors, **stats},
         "clashes": {"results": clashes, "count": len(clashes)},
         "rule": "HK FS Code 2011 Table B2"

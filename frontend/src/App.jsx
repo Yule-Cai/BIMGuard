@@ -106,9 +106,10 @@ export default function App() {
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-xs text-gray-500">Compliance Score</div>
-                    <div className="text-3xl font-bold">{summary.score} <span className="text-sm font-normal text-gray-500">/100</span></div>
+                    <div className="text-3xl font-bold">{summary.score===null||summary.score===undefined?'N/A':summary.score} <span className="text-sm font-normal text-gray-500">{summary.score===null?'': '/100'}</span></div>
+                    {summary.score===null && <div className="text-xs text-gray-400">No applicable elements</div>}
                   </div>
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold ${summary.score>=80?'bg-green-600':summary.score>=50?'bg-amber-500':'bg-red-600'}`}>{summary.score}</div>
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold ${summary.score===null?'bg-gray-400':summary.score>=80?'bg-green-600':summary.score>=50?'bg-amber-500':'bg-red-600'}`}>{summary.score===null?'—':summary.score}</div>
                 </div>
                 <div className="grid grid-cols-2 gap-3 mt-4">
                   <div className="border rounded-lg p-3">

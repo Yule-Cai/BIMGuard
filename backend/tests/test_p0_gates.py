@@ -184,10 +184,11 @@ def test_p0_9_empty_model():
     summary = client.get("/api/summary?min_width=750").json()
     assert summary["doors"]["total"] == 0
     assert summary["clashes"]["count"] == 0
-    # score should be N/A or 100? Current code gives 100 when no elements, but P0-9 suggests N/A would be better
-    # For now, ensure it doesn't claim compliant violations
+    # P0-9: empty should be N/A, not 100
+    assert summary["score"] is None, f"empty should be N/A, got {summary['score']}"
+    assert summary["score_status"] == "not_applicable"
     chat = client.post("/api/chat", json={"message":"Show me all serious violations","min_width":750}).json()
-    assert "No violations" in chat["reply"] or "0" in chat["reply"] or "no" in chat["reply"].lower()
+    assert "No applicable" in chat["reply"] or "No violations" in chat["reply"] or "0" in chat["reply"] or "no" in chat["reply"].lower()
     os.unlink(path)
     _load_sample()
 
