@@ -6,23 +6,40 @@ export default function ChatPanel({ minWidth }) {
   ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [useLlm, setUseLlm] = useState(true)
+  const [liveInfo, setLiveInfo] = useState('Grounded explainer')
 
   const send = async () => {
     if (!input.trim()) return
     const userMsg = input
     setMsgs(m=>[...m, {role:'user', text:userMsg}])
     setInput(''); setLoading(true)
+    const controller = new AbortController()
+    const t = setTimeout(()=>controller.abort(), 30000)
     try {
       const r = await fetch('/api/chat', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ message: userMsg, min_width: minWidth, use_llm: false })
+        body: JSON.stringify({ message: userMsg, min_width: minWidth, use_llm: useLlm }),
+        signal: controller.signal
       })
+      clearTimeout(t)
       if (!r.ok) throw new Error(await r.text())
       const j = await r.json()
-      setMsgs(m=>[...m, {role:'assistant', text:j.reply, meta:j.mode}])
+      // Live/Mock indicator
+      if (j.mode && j.mode.startsWith('llm:')) {
+        setLiveInfo(`Live · ${j.model || j.mode.replace('llm:','')}`)
+      } else if (j.mode && j.mode.startsWith('mock_fallback')) {
+        setLiveInfo('LLM unavailable — deterministic fallback')
+      } else {
+        setLiveInfo('Deterministic')
+      }
+      setMsgs(m=>[...m, {role:'assistant', text:j.reply, meta: `${j.mode}${j.provider?` · ${j.provider}`:''}`}])
     } catch(e){
-      setMsgs(m=>[...m, {role:'assistant', text:'Error: '+e.message}])
+      clearTimeout(t)
+      const isAbort = e.name==='AbortError'
+      setLiveInfo(isAbort ? 'Timeout' : 'Error')
+      setMsgs(m=>[...m, {role:'assistant', text: isAbort ? 'LLM timeout (30s) — please retry or uncheck Live LLM' : 'Error: '+e.message}])
     } finally { setLoading(false) }
   }
 
@@ -30,7 +47,10 @@ export default function ChatPanel({ minWidth }) {
     <div className="bg-white rounded-xl border flex flex-col h-[300px]">
       <div className="px-4 py-2 border-b font-medium text-sm flex items-center justify-between">
         <span>Ask BIMGuard</span>
-        <span className="text-xs bg-gray-100 px-2 py-0.5 rounded">Tool-router · deterministic</span>
+        <div className="flex items-center gap-2">
+          <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={useLlm} onChange={e=>setUseLlm(e.target.checked)} className="rounded"/> Live LLM</label>
+          <span className={`text-xs px-2 py-0.5 rounded ${liveInfo.startsWith('Live')?'bg-green-100 text-green-700':liveInfo.includes('fallback')||liveInfo.includes('unavailable')?'bg-amber-100 text-amber-700':'bg-gray-100'}`}>{liveInfo}</span>
+        </div>
       </div>
       <div className="flex-1 overflow-auto p-3 space-y-2">
         {msgs.map((m,i)=>(

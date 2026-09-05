@@ -44,7 +44,7 @@
     </div>
     <div id="noModel" class="bg-white rounded-xl border p-8 text-center text-sm text-gray-500">Upload an .ifc to see results.<br/><span class="text-xs">Try sample-ifc/BIMGuard_Demo.ifc (D-102 fail + 1 labelled synthetic clash)</span><br/><button id="loadSample" class="mt-3 border px-3 py-1 rounded text-xs hover:bg-black hover:text-white">Load Demo Data (if preloaded)</button></div>
     <div id="issues" class="bg-white rounded-xl border hidden flex flex-col"><div class="px-4 py-2 border-b font-medium text-sm">Critical Issues</div><div id="issuesList" class="divide-y max-h-[300px] overflow-auto"></div><div id="explainBox" class="hidden m-3 p-3 bg-gray-50 border rounded text-xs whitespace-pre-wrap"></div></div>
-    <div class="bg-white rounded-xl border flex flex-col h-[300px]"><div class="px-4 py-2 border-b font-medium text-sm flex items-center justify-between"><span>Ask BIMGuard</span><span class="text-xs bg-gray-100 px-2 py-0.5 rounded">Grounded explainer</span></div><div id="chatLog" class="flex-1 overflow-auto p-3 space-y-2 text-xs"><div class="bg-gray-100 p-2 rounded">Ask e.g. "Why is D-102 a problem?" or "Show me all serious violations"</div></div><div class="p-2 border-t flex gap-2"><input id="chatInput" placeholder="Why is D-102 non-compliant?" class="flex-1 border rounded px-3 py-1.5 text-sm"/><button id="chatSend" class="bg-black text-white px-4 py-1.5 rounded text-sm">Send</button></div></div>
+    <div class="bg-white rounded-xl border flex flex-col h-[300px]"><div class="px-4 py-2 border-b font-medium text-sm flex items-center justify-between"><span>Ask BIMGuard</span><div class="flex items-center gap-2"><label class="flex items-center gap-1 text-xs"><input id="useLlmToggle" type="checkbox" checked class="rounded"> <span id="useLlmLabel">Live LLM</span></label><span id="chatMode" class="text-xs bg-gray-100 px-2 py-0.5 rounded">Grounded explainer</span></div></div><div id="chatLog" class="flex-1 overflow-auto p-3 space-y-2 text-xs"><div class="bg-gray-100 p-2 rounded">Ask e.g. "Why is D-102 a problem?" or "Show me all serious violations"</div></div><div class="p-2 border-t flex gap-2"><input id="chatInput" placeholder="Why is D-102 non-compliant?" class="flex-1 border rounded px-3 py-1.5 text-sm"/><button id="chatSend" class="bg-black text-white px-4 py-1.5 rounded text-sm">Send</button></div></div>
   </div>
 </div>
 <footer class="text-center text-xs text-gray-400 py-3 border-t bg-white">Deterministic: IfcOpenShell · LLM: grounded explanation · HKU DUPAD Ref.536608</footer>
@@ -175,9 +175,47 @@ async function sendChat(){
   const log=document.getElementById('chatLog');
   const u=document.createElement('div'); u.className='bg-black text-white p-2 rounded max-w-[90%] ml-auto text-xs'; u.textContent=msg; log.appendChild(u);
   input.value='';
-  const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg, min_width: document.getElementById('minWidth').value})});
-  const j=await r.json();
-  const a=document.createElement('div'); a.className='bg-gray-100 p-2 rounded text-xs whitespace-pre-wrap'; a.textContent=j.reply; log.appendChild(a); log.scrollTop=log.scrollHeight;
+  const useLlm = document.getElementById('useLlmToggle')?.checked ?? true;
+  const controller = new AbortController();
+  const timeout = setTimeout(()=>controller.abort(), 30000);
+  try{
+    const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg, min_width: document.getElementById('minWidth').value, use_llm: useLlm}), signal: controller.signal});
+    clearTimeout(timeout);
+    if(!r.ok){
+      const txt = await r.text();
+      throw new Error(txt);
+    }
+    const j=await r.json();
+    const a=document.createElement('div'); a.className='bg-gray-100 p-2 rounded text-xs whitespace-pre-wrap'; a.textContent=j.reply; log.appendChild(a);
+    // Live/Mock indicator
+    const modeEl = document.getElementById('chatMode');
+    if(j.mode && j.mode.startsWith('llm:')){
+      const modelShort = (j.model || j.mode.replace('llm:','')).split('/').pop();
+      modeEl.textContent = `Live · ${modelShort}`;
+      modeEl.className = 'text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded';
+      modeEl.title = `Provider: ${j.provider || ''} Mode: ${j.mode}`;
+    } else if(j.mode && j.mode.startsWith('mock_fallback')){
+      modeEl.textContent = 'LLM unavailable — deterministic fallback';
+      modeEl.className = 'text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded';
+      modeEl.title = j.mode;
+    } else {
+      modeEl.textContent = 'Deterministic';
+      modeEl.className = 'text-xs bg-gray-100 px-2 py-0.5 rounded';
+    }
+    // Show meta
+    if(j.mode){
+      const meta=document.createElement('div'); meta.className='text-[10px] opacity-50 mt-1'; meta.textContent=j.mode + (j.provider?` · ${j.provider}`:''); a.appendChild(meta);
+    }
+    log.scrollTop=log.scrollHeight;
+  }catch(e){
+    clearTimeout(timeout);
+    const isAbort = e.name==='AbortError';
+    const err=document.createElement('div'); err.className='bg-red-50 border border-red-200 text-red-700 p-2 rounded text-xs';
+    err.textContent = isAbort ? 'LLM timeout (30s) — deterministic fallback not used in strict mode' : `Error: ${e.message}`;
+    log.appendChild(err);
+    document.getElementById('chatMode').textContent = isAbort ? 'Timeout' : 'Error';
+    document.getElementById('chatMode').className = 'text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded';
+  }
 }
 fetchSummary().then(()=>fetchElements()).catch(()=>{});
 </script>

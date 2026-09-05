@@ -34,6 +34,7 @@ class ChatRequest(BaseModel):
     message: str
     min_width: float = 750
     use_llm: bool = False
+    strict_llm: bool = False
 
 @app.get("/api/health")
 def health():
@@ -142,7 +143,22 @@ def chat(req: ChatRequest):
     model = ifc_engine.get_current_model()
     if model is None:
         raise HTTPException(400, "No IFC loaded. Upload first.")
-    result = route_message(req.message, req.min_width, req.use_llm)
+    # Allow env-level strict as well inside route_message
+    if req.strict_llm:
+        # In strict mode, let LLM errors surface as 502, not silent mock
+        try:
+            result = route_message(req.message, req.min_width, req.use_llm, strict_llm=True)
+        except RuntimeError as e:
+            raise HTTPException(status_code=502, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"LLM strict failure: {e}")
+        return result
+    # Normal mode (fallback allowed)
+    try:
+        result = route_message(req.message, req.min_width, req.use_llm, strict_llm=False)
+    except RuntimeError as e:
+        # Even normal mode may raise if strict_llm env is set and no key
+        raise HTTPException(status_code=400, detail=str(e))
     return result
 
 # Tool-direct endpoints for Agent debugging

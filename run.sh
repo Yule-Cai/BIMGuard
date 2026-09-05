@@ -19,6 +19,16 @@ if ! pip3 show ifcopenshell >/dev/null 2>&1; then
   echo "Note: IfcOpenShell is not installed. The controlled BIMGuard_Demo.ifc can still use its labelled synthetic fallback, but arbitrary real IFC clash detection is disabled."
   echo "For full geometry mode run: pip install -r backend/requirements.txt"
 fi
+# Optional live LLM layer (explanation only, never decides compliance)
+if [ -n "$OPENAI_API_KEY" ] || [ -n "$LLM_API_KEY" ]; then
+  echo "Live LLM detected: ${LLM_MODEL:-$OPENAI_API_KEY:0:8...} @ ${OPENAI_BASE_URL:-https://api.openai.com/v1}"
+  if ! pip3 show openai >/dev/null 2>&1; then
+    echo "Installing LLM dependency (openai)..."
+    pip3 install -q -r backend/requirements-llm.txt 2>&1 | tail -5 || pip3 install -q openai 2>&1 | tail -5
+  fi
+else
+  echo "Deterministic mode (no OPENAI_API_KEY). For live LLM explanations: export OPENAI_API_KEY=... LLM_MODEL=... ; pip install -r backend/requirements-llm.txt"
+fi
 
 echo ""
 echo "Starting backend at http://localhost:8000"

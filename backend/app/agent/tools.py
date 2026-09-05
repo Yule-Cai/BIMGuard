@@ -184,33 +184,50 @@ def _mock_explain(message: str, min_width=750):
 
     return _mock_explain("summary", min_width)
 
-def route_message(message: str, min_width=750, use_llm=False):
+def route_message(message: str, min_width=750, use_llm=False, strict_llm=False):
     """
     Entry point for /api/chat.
     If OPENAI_API_KEY set and use_llm True, calls OpenAI; else mock.
+    strict_llm=True  or  LLM_STRICT=1  =>  real LLM failure is an error, never silent mock.
     """
+    # Check env-level strict flag
+    if os.getenv("LLM_STRICT") == "1":
+        strict_llm = True
+
     api_key = os.getenv("OPENAI_API_KEY") or os.getenv("LLM_API_KEY")
     if api_key and use_llm:
         try:
             return _call_llm(message, min_width, api_key)
         except Exception as e:
-            # fallback to mock on LLM failure
-            return {"reply": _mock_explain(message, min_width), "tools_used": ["check_exit_door_width","detect_clashes","get_summary"], "mode": f"mock_fallback: {e}"}
+            if strict_llm:
+                # Strict mode: do not hide the failure — let the caller see it
+                raise RuntimeError(f"LLM strict failure: {e}") from e
+            # Normal UX: fall back to deterministic evidence renderer but mark it clearly
+            return {"reply": _mock_explain(message, min_width), "tools_used": ["check_exit_door_width","detect_clashes","get_summary"], "mode": f"mock_fallback: {e}", "provider": "fallback", "model": "mock"}
     else:
+        if strict_llm and use_llm and not api_key:
+            raise RuntimeError("LLM strict mode requested but no OPENAI_API_KEY / LLM_API_KEY is set")
         # Gather evidence anyway
-        return {"reply": _mock_explain(message, min_width), "tools_used": ["check_exit_door_width","detect_clashes","get_summary"], "mode": "mock_deterministic"}
+        return {"reply": _mock_explain(message, min_width), "tools_used": ["check_exit_door_width","detect_clashes","get_summary"], "mode": "mock_deterministic", "provider": "mock", "model": "mock"}
 
 def _call_llm(message: str, min_width, api_key: str):
     # Lazy import
     try:
         from openai import OpenAI
-    except:
-        raise RuntimeError("openai package not installed")
+    except Exception as e:
+        raise RuntimeError(f"openai package not installed (pip install openai): {e}")
     base_url = os.getenv("OPENAI_BASE_URL") or os.getenv("LLM_BASE_URL") or "https://api.openai.com/v1"
-    model = os.getenv("LLM_MODEL") or "gpt-4o-mini"
-    client = OpenAI(api_key=api_key, base_url=base_url)
+    model = os.getenv("LLM_MODEL") or os.getenv("LLM_MODEL_NAME") or "gpt-4o-mini"
+    # Provider for audit (domain only, no key)
+    try:
+        from urllib.parse import urlparse
+        provider = urlparse(base_url).hostname or base_url
+    except:
+        provider = base_url
 
-    # Pre-gather evidence to inject
+    client = OpenAI(api_key=api_key, base_url=base_url, timeout=30.0, max_retries=0)
+
+    # Pre-gather evidence to inject — deterministic, no LLM judgement
     doors = call_tool("check_exit_door_width", {"min_width": min_width})
     clashes = call_tool("detect_clashes", {})
     summary = call_tool("get_summary", {"min_width": min_width})
@@ -219,14 +236,45 @@ def _call_llm(message: str, min_width, api_key: str):
     from .prompt import load_system_prompt
     sys_prompt = load_system_prompt()
 
-    resp = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": sys_prompt + f"\n\nEvidence JSON (use this, do not invent):\n{evidence}"},
-            {"role": "user", "content": message}
-        ],
-        temperature=0.2,
-        max_tokens=800
-    )
-    reply = resp.choices[0].message.content
-    return {"reply": reply, "tools_used": ["check_exit_door_width","detect_clashes","get_summary"], "mode": f"llm:{model}", "evidence": evidence}
+    try:
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": sys_prompt + f"\n\nEvidence JSON (use this, do not invent):\n{evidence}"},
+                {"role": "user", "content": message}
+            ],
+            temperature=0.2,
+            max_tokens=800
+        )
+    except Exception as e:
+        # Ensure timeout/auth/provider errors are inspectable and not swallowed
+        raise RuntimeError(f"LLM API call failed (provider={provider}, model={model}): {e}") from e
+
+    try:
+        reply = resp.choices[0].message.content or ""
+    except Exception as e:
+        raise RuntimeError(f"LLM response parse failed: {e}") from e
+
+    # Try to capture request id if provider returns it (not required)
+    request_id = None
+    try:
+        # OpenAI python client exposes response headers via resp._request_id or similar in some versions
+        request_id = getattr(resp, "id", None)
+        if not request_id:
+            # Try to get from response headers if available
+            request_id = getattr(getattr(resp, "_response", None), "headers", {}).get("x-request-id") if hasattr(resp, "_response") else None
+    except:
+        request_id = None
+
+    result = {
+        "reply": reply,
+        "tools_used": ["check_exit_door_width","detect_clashes","get_summary"],
+        "mode": f"llm:{model}",
+        "provider": provider,
+        "model": model,
+        "base_url": base_url,
+        "evidence": evidence
+    }
+    if request_id:
+        result["request_id"] = request_id
+    return result
