@@ -81,8 +81,8 @@ def test():
     clashes = detect_clashes(model)
     assert len(clashes) >= 1, "expected controlled demo clash"
     assert clashes[0]["severity"] == "high"
-    assert clashes[0]["method"] == "synthetic_aabb_fallback", clashes[0]
-    print("✓ controlled demo door + labelled synthetic clash checks pass")
+    assert clashes[0]["method"] == "ifcopenshell_bvh", clashes[0]
+    print("✓ controlled demo door + real BVH clash checks pass (now true geometry)")
 
     r = route_message("Why is D-102 a problem?", 750)
     assert "680" in r["reply"] and "750" in r["reply"], (

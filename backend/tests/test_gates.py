@@ -27,8 +27,8 @@ def test_gate_synthetic():
     assert by["D-102"]["status"]=="fail" and by["D-102"]["measured_mm"]==680
     assert by["D-103"]["status"]=="pass" and by["D-103"]["measured_mm"]==750
     clashes = detect_clashes(model)
-    assert any(c["method"]=="synthetic_aabb_fallback" for c in clashes)
-    print("✓ Gate synthetic")
+    assert any(c["method"]=="ifcopenshell_bvh" for c in clashes), f"demo should be real BVH, got {clashes}"
+    print("✓ Gate synthetic -> real BVH")
 
 def test_gate_units():
     # Run the unit tests

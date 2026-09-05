@@ -45,14 +45,13 @@ def test_p0_1_synthetic():
     # 750 threshold: 2 pass 1 fail
     assert sum(d["status"]=="pass" for d in doors) == 2
     assert sum(d["status"]=="fail" for d in doors) == 1
-    # clash must be found and labelled synthetic
+    # clash must be found and labelled as real BVH (demo now has true geometry)
     clashes = detect_clashes(model)
     assert len(clashes) >= 1, f"expected clash, got {clashes}"
-    # find B-017 x P-042
     found = [c for c in clashes if ("B-017" in c["a_name"] or "B-017" in c["b_name"]) and ("P-042" in c["a_name"] or "P-042" in c["b_name"])]
     assert found, f"B-017 x P-042 not found in {clashes}"
-    assert found[0]["method"] == "synthetic_aabb_fallback"
-    assert found[0]["penetration_mm"] == 100.0
+    assert found[0]["method"] == "ifcopenshell_bvh", f"demo should be real BVH now, got {found[0]['method']}"
+    assert 80 <= found[0]["penetration_mm"] <= 120
     # agent must cite 680/750/-70
     from backend.app.agent.tools import route_message
     reply = route_message("Why is D-102 a problem?", 750)["reply"]
