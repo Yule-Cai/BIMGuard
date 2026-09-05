@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import Viewer from './components/Viewer.jsx'
 import IssuesPanel from './components/IssuesPanel.jsx'
 import ChatPanel from './components/ChatPanel.jsx'
+import PropertyPanel from './components/PropertyPanel.jsx'
 
 export default function App() {
   const [summary, setSummary] = useState(null)
@@ -95,7 +96,7 @@ export default function App() {
             <span className="text-xs text-gray-500">{selectedGuid ? `Selected: ${selectedGuid.slice(0,8)}` : 'Schematic placement view · click issue → Locate'}</span>
           </div>
           <div className="flex-1 min-h-[520px]">
-            <Viewer elements={elements} selectedGuid={selectedGuid} failedDoorGuids={failedDoorGuids} />
+            <Viewer elements={elements} selectedGuid={selectedGuid} failedDoorGuids={failedDoorGuids} onSelect={setSelectedGuid} />
           </div>
         </div>
 
@@ -135,6 +136,7 @@ export default function App() {
           )}
 
           <ChatPanel minWidth={minWidth} />
+          <PropertyPanel guid={selectedGuid} onClose={()=>setSelectedGuid(null)} />
         </div>
       </div>
 
