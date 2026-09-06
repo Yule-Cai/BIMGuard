@@ -54,6 +54,10 @@ async def upload_ifc(file: UploadFile = File(...)):
     try:
         ifc_engine.set_current_file(dest)
         logger.info("Uploaded %s (%d bytes) -> %s", file.filename, len(content), dest)
+        # Invalidate geometry cache on new upload
+        global _geometry_cache, _geometry_cache_path
+        _geometry_cache = {}
+        _geometry_cache_path = None
     except Exception as e:
         logger.exception("Failed to parse %s", file.filename)
         raise HTTPException(400, str(e))
@@ -160,6 +164,165 @@ def chat(req: ChatRequest):
         # Even normal mode may raise if strict_llm env is set and no key
         raise HTTPException(status_code=400, detail=str(e))
     return result
+
+# Geometry API — real triangulated IFC geometry
+_geometry_cache = {}
+_geometry_cache_path = None
+
+def _get_geometry_payload():
+    global _geometry_cache, _geometry_cache_path
+    model = ifc_engine.get_current_model()
+    path = ifc_engine.get_current_path()
+    if model is None or path is None:
+        raise HTTPException(400, "No IFC loaded. POST /api/upload first.")
+    # Use fallback check: if model is dict (regex), no real geometry
+    if isinstance(model, dict) and model.get("_fallback"):
+        return {"elements": [], "stats": {"elements": 0, "vertices": 0, "triangles": 0, "note": "synthetic demo has no shape, fallback"}}
+    # Cache
+    if _geometry_cache_path == path and _geometry_cache:
+        return _geometry_cache
+    # Try to extract real geometry
+    try:
+        import ifcopenshell.geom
+        import ifcopenshell.util.shape
+        import ifcopenshell.util.unit
+    except Exception as e:
+        raise HTTPException(500, f"IfcOpenShell geom not available: {e}")
+    # Settings
+    settings = ifcopenshell.geom.settings()
+    settings.set(settings.USE_WORLD_COORDS, True)
+    # Limit threads
+    import os as _os
+    workers = max(1, min(4, _os.cpu_count() or 1))
+    try:
+        iterator = ifcopenshell.geom.iterator(settings, model, workers)
+    except Exception as e:
+        raise HTTPException(500, f"Failed to create geometry iterator: {e}")
+    elements = []
+    total_vertices = 0
+    total_triangles = 0
+    start = __import__("time").time()
+    # For very large IFC, limit elements
+    max_elements = 250
+    max_triangles = 600000
+    try:
+        if not iterator.initialize():
+            raise HTTPException(500, "Geometry iterator failed to initialize")
+        count = 0
+        while True:
+            shape = iterator.get()
+            try:
+                el = shape.instance if hasattr(shape, "instance") else None
+                # Fallback for older API
+                if el is None:
+                    try:
+                        el = model.by_guid(shape.guid) if hasattr(shape, "guid") else None
+                    except:
+                        el = None
+                if el is None:
+                    if not iterator.next():
+                        break
+                    continue
+                # Only renderable products
+                if el.is_a() not in ("IfcWall", "IfcDoor", "IfcSlab", "IfcBeam", "IfcColumn", "IfcPipeSegment", "IfcFlowSegment", "IfcDuctSegment", "IfcWindow", "IfcDistributionElement", "IfcDistributionFlowElement"):
+                    if not iterator.next():
+                        break
+                    continue
+                # Get global vertices and faces — handle numpy arrays correctly
+                try:
+                    verts = ifcopenshell.util.shape.get_vertices(shape.geometry)
+                    faces = ifcopenshell.util.shape.get_faces(shape.geometry)
+                except Exception:
+                    try:
+                        verts = shape.geometry.verts
+                        faces = shape.geometry.faces
+                    except:
+                        if not iterator.next():
+                            break
+                        continue
+                # Normalize numpy arrays to lists
+                try:
+                    import numpy as np
+                    if isinstance(verts, np.ndarray):
+                        verts = verts.tolist()
+                    if isinstance(faces, np.ndarray):
+                        faces = faces.tolist()
+                except:
+                    pass
+                # verts: list of [x,y,z] or flat list
+                flat_verts = []
+                verts_list = []
+                try:
+                    if isinstance(verts, (list, tuple)) and len(verts) > 0 and isinstance(verts[0], (list, tuple)):
+                        verts_list = verts
+                        flat_verts = [float(v) for tri in verts for v in tri]
+                    else:
+                        flat_verts = [float(v) for v in verts]
+                        verts_list = [flat_verts[i:i+3] for i in range(0, len(flat_verts), 3)]
+                except Exception as e:
+                    logger.warning(f"verts parse failed: {e}")
+                    if not iterator.next():
+                        break
+                    continue
+                try:
+                    if isinstance(faces, (list, tuple)) and len(faces) > 0 and isinstance(faces[0], (list, tuple)):
+                        faces_list = faces
+                        indices = [int(idx) for tri in faces for idx in tri]
+                    else:
+                        indices = [int(i) for i in faces]
+                        faces_list = [indices[i:i+3] for i in range(0, len(indices), 3)]
+                except Exception as e:
+                    logger.warning(f"faces parse failed: {e}")
+                    if not iterator.next():
+                        break
+                    continue
+                # Limit payload
+                if total_triangles + len(faces_list) > max_triangles:
+                    logger.warning(f"Geometry limit reached: {total_triangles} triangles, skipping remaining")
+                    break
+                # Build element payload with flattened vertices and indices for Three.js
+                # Use flattened for efficiency
+                elements.append({
+                    "guid": getattr(el, "GlobalId", ""),
+                    "name": getattr(el, "Name", "") or getattr(el, "Tag", "") or el.is_a(),
+                    "type": el.is_a(),
+                    "vertices": flat_verts,
+                    "indices": indices,
+                    "vertex_count": len(verts_list),
+                    "triangle_count": len(faces_list),
+                })
+                total_vertices += len(verts_list)
+                total_triangles += len(faces_list)
+                count += 1
+                if count >= max_elements:
+                    logger.warning(f"Element limit {max_elements} reached")
+                    break
+            except Exception as e:
+                logger.warning(f"Failed to process shape: {e}")
+            if not iterator.next():
+                break
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"Geometry extraction failed: {e}")
+    elapsed = __import__("time").time() - start
+    payload = {
+        "elements": elements,
+        "stats": {
+            "elements": len(elements),
+            "vertices": total_vertices,
+            "triangles": total_triangles,
+            "extraction_ms": int(elapsed * 1000),
+            "payload_kb": int((sum(len(e["vertices"])*4 + len(e["indices"])*4 for e in elements))/1024),
+        }
+    }
+    _geometry_cache = payload
+    _geometry_cache_path = path
+    return payload
+
+@app.get("/api/geometry")
+def geometry():
+    return _get_geometry_payload()
 
 # Tool-direct endpoints for Agent debugging
 @app.post("/api/tools/{tool_name}")

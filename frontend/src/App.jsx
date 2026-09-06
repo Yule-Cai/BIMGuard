@@ -57,10 +57,13 @@ export default function App() {
   const failedDoorGuids = new Set(
     (summary?.doors?.results || []).filter(d => d.status === 'fail').map(d => d.guid)
   )
+  const clashGuids = new Set(
+    (summary?.clashes?.results || []).flatMap(c => [c.a_guid, c.b_guid])
+  )
   const firstClashMethod = summary?.clashes?.results?.[0]?.method
   const clashMethodLabel = firstClashMethod === 'synthetic_aabb_fallback'
     ? 'Labelled synthetic demo fallback'
-    : 'IfcOpenShell BVH for real geometry'
+    : firstClashMethod === 'ifcopenshell_bvh' ? 'IfcOpenShell BVH · real geometry' : 'IfcOpenShell BVH for real geometry'
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -92,11 +95,14 @@ export default function App() {
       <div className="flex-1 grid grid-cols-12 gap-4 p-4">
         <div className="col-span-7 bg-white rounded-xl border overflow-hidden flex flex-col">
           <div className="px-4 py-2 border-b flex items-center justify-between">
-            <span className="font-medium text-sm">3D Element Locator</span>
-            <span className="text-xs text-gray-500">{selectedGuid ? `Selected: ${selectedGuid.slice(0,8)}` : 'Schematic placement view · click issue → Locate'}</span>
+            <span className="font-medium text-sm">3D IFC Viewer</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">{selectedGuid ? `Selected: ${selectedGuid.slice(0,8)}` : 'IFC geometry · click element or issue → Locate'}</span>
+              {selectedGuid && <button onClick={()=>setSelectedGuid(null)} className="text-xs border px-2 py-0.5 rounded hover:bg-gray-50">Reset</button>}
+            </div>
           </div>
           <div className="flex-1 min-h-[520px]">
-            <Viewer elements={elements} selectedGuid={selectedGuid} failedDoorGuids={failedDoorGuids} onSelect={setSelectedGuid} />
+            <Viewer elements={elements} selectedGuid={selectedGuid} failedDoorGuids={failedDoorGuids} clashGuids={clashGuids} onSelect={setSelectedGuid} />
           </div>
         </div>
 

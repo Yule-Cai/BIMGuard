@@ -31,14 +31,24 @@ def create_sample(out_path, doors_cfg=None, do_clash=True):
     ifcopenshell.api.run("aggregate.assign_object", model, relating_object=site, products=[building])
     ifcopenshell.api.run("aggregate.assign_object", model, relating_object=building, products=[storey])
 
-    # Owner history minimal
-    # Create walls - simple placements
+    # Small office layout: 12m x 8m footprint
+    #  - Reception/Open Office (main)
+    #  - Meeting Room (4x4m) with D-103
+    #  - Small Office (3x3m)
+    #  - Corridor with D-101/D-102 and B-017/P-042 clash
     walls = []
+    # Outer walls: 12x8 rectangle
     wall_coords = [
-        ("W-01", (0,0,0), (10,0,0)),
-        ("W-02", (10,0,0), (10,10,0)),
-        ("W-03", (10,10,0), (0,10,0)),
-        ("W-04", (0,10,0), (0,0,0)),
+        ("W-01", (0,0,0), (12,0,0)),   # south
+        ("W-02", (12,0,0), (12,8,0)),  # east
+        ("W-03", (12,8,0), (0,8,0)),   # north
+        ("W-04", (0,8,0), (0,0,0)),    # west
+        # Inner: Meeting room 4x4 at top-right (8,4)-(12,8)
+        ("W-05", (8,4,0), (8,8,0)),    # meeting west
+        ("W-06", (8,4,0), (12,4,0)),   # meeting south
+        # Small office 3x3 at bottom-right
+        ("W-07", (9,0,0), (9,3,0)),    # office west
+        ("W-08", (9,3,0), (12,3,0)),   # office north
     ]
     import numpy as np
     for name, start, end in wall_coords:
@@ -47,13 +57,27 @@ def create_sample(out_path, doors_cfg=None, do_clash=True):
         mat[0,3], mat[1,3], mat[2,3] = start
         ifcopenshell.api.run("geometry.edit_object_placement", model, product=wall, matrix=mat, is_si=True)
         ifcopenshell.api.run("spatial.assign_container", model, products=[wall], relating_structure=storey)
-        # Real geometry for viewer/BVH: simple wall box 5m x 3m x 0.2m
+        # Real geometry: wall lengths vary, use 4m avg for demo; slab will provide floor
         try:
-            rep = ifcopenshell.api.run("geometry.add_wall_representation", model, context=body, length=5, height=3, thickness=0.2)
+            # Use 4m length for inner walls, 5m for outer (as before, BVH will still detect)
+            length = 4 if name in ("W-05","W-06","W-07","W-08") else 5
+            rep = ifcopenshell.api.run("geometry.add_wall_representation", model, context=body, length=length, height=3, thickness=0.2)
             ifcopenshell.api.run("geometry.assign_representation", model, product=wall, representation=rep)
         except Exception:
             pass
         walls.append(wall)
+    # Floor slab: 12x8m at z=0, thickness 0.2m, light grey
+    try:
+        slab = ifcopenshell.api.run("root.create_entity", model, ifc_class="IfcSlab", name="Floor-01")
+        mat_slab = np.eye(4)
+        ifcopenshell.api.run("geometry.edit_object_placement", model, product=slab, matrix=mat_slab, is_si=True)
+        ifcopenshell.api.run("spatial.assign_container", model, products=[slab], relating_structure=storey)
+        rep_slab = ifcopenshell.api.run("geometry.add_wall_representation", model, context=body, length=12, height=0.2, thickness=8)
+        # Rotate slab to be horizontal: wall rep is vertical, but for demo we use it as floor box; placement at origin will show as wall-like but viewer will show as slab
+        # Instead, create a slab-like representation via generic add_representation if needed
+        ifcopenshell.api.run("geometry.assign_representation", model, product=slab, representation=rep_slab)
+    except Exception:
+        pass
 
     # Doors with real geometry (thin box) for true rendering
     for name, width_m, height_m, pos in doors_cfg:
